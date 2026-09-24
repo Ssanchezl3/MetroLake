@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MetroLake · Simulador</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
+</head>
+<body>
+  <div class="app">
+    <!-- Barra lateral / menu -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">M</div>
+        <div>
+          <div class="brand-name">MetroLake</div>
+          <div class="brand-sub">Simulador de datos</div>
+        </div>
+      </div>
+
+      <nav class="menu">
+        <button class="menu-item active" data-view="panel">
+          <span class="dot"></span> Panel general
+        </button>
+        <button class="menu-item" data-view="batch">
+          <span class="dot"></span> Simuladores (batch)
+        </button>
+        <button class="menu-item" data-view="streaming">
+          <span class="dot"></span> Streaming en vivo
+        </button>
+        <button class="menu-item" data-view="comparar">
+          <span class="dot"></span> Comparar
+        </button>
+      </nav>
+
+      <div class="sidebar-info" id="config-info">
+        <div class="info-title">Configuración</div>
+        <div class="info-row"><span>Estaciones</span><b id="cfg-estaciones">—</b></div>
+        <div class="info-row"><span>Tramos</span><b id="cfg-tramos">—</b></div>
+        <div class="info-row"><span>Sensores</span><b id="cfg-sensores">—</b></div>
+        <div class="info-row"><span>Pluviómetros</span><b id="cfg-pluviometros">—</b></div>
+      </div>
+
+      <div class="sidebar-foot">Metro de Medellín · demo</div>
+    </aside>
+
+    <!-- Contenido -->
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <h1 id="view-title">Panel general</h1>
+          <p id="view-desc" class="muted">Vista rápida del sistema de simulación.</p>
+        </div>
+        <div class="legend">
+          <span class="tag tag-pasajeros">Pasajeros</span>
+          <span class="tag tag-vibracion">Vibración</span>
+          <span class="tag tag-clima">Clima</span>
+        </div>
+      </header>
+
+      <!-- VISTA: PANEL -->
+      <section class="view active" id="view-panel">
+        <div class="cards">
+          <article class="card card-pasajeros">
+            <div class="card-head">Pasajeros <span class="tag tag-pasajeros">torniquetes</span></div>
+            <p class="muted">Entradas, salidas, ocupación y horas pico por estación.</p>
+          </article>
+          <article class="card card-vibracion">
+            <div class="card-head">Vibración <span class="tag tag-vibracion">acelerómetros</span></div>
+            <p class="muted">Telemetría RMS, frecuencia, fatiga y detección de anomalías.</p>
+          </article>
+          <article class="card card-clima">
+            <div class="card-head">Clima <span class="tag tag-clima">pluviómetros</span></div>
+            <p class="muted">Precipitación, acumulado diario y nivel de alerta.</p>
+          </article>
+        </div>
+        <div class="panel-note">
+          Usa el menú para <b>generar un lote batch</b>, ver el <b>streaming en vivo</b>,
+          o <b>comparar</b> ambos modos lado a lado.
+        </div>
+      </section>
+
+      <!-- VISTA: BATCH -->
+      <section class="view" id="view-batch">
+        <div class="toolbar">
+          <label>Ventana de tiempo
+            <select id="batch-minutos">
+              <option value="10">10 min</option>
+              <option value="30" selected>30 min</option>
+              <option value="60">60 min</option>
+              <option value="120">120 min</option>
+            </select>
+          </label>
+          <button class="btn btn-primary" id="btn-batch">Generar lote batch</button>
+          <span class="status" id="batch-status"></span>
+        </div>
+        <div id="batch-resumen" class="metrics-grid"></div>
+        <div class="table-wrap">
+          <div class="table-title">Últimas muestras generadas</div>
+          <div id="batch-muestras" class="samples"></div>
+        </div>
+      </section>
+
+      <!-- VISTA: STREAMING -->
+      <section class="view" id="view-streaming">
+        <div class="toolbar">
+          <button class="btn btn-primary" id="btn-stream-start">▶ Iniciar streaming</button>
+          <button class="btn" id="btn-stream-stop" disabled>■ Detener</button>
+          <label>Intervalo
+            <select id="stream-intervalo">
+              <option value="1500">Lento (1.5s)</option>
+              <option value="800" selected>Normal (0.8s)</option>
+              <option value="300">Rápido (0.3s)</option>
+            </select>
+          </label>
+          <span class="status" id="stream-status">Detenido</span>
+        </div>
+        <div class="stream-counts">
+          <div class="count count-vibracion"><b id="c-vibracion">0</b><span>vibración</span></div>
+          <div class="count count-pasajeros"><b id="c-pasajeros">0</b><span>pasajeros</span></div>
+          <div class="count count-clima"><b id="c-clima">0</b><span>clima</span></div>
+          <div class="count count-total"><b id="c-total">0</b><span>total</span></div>
+        </div>
+        <div class="table-wrap">
+          <div class="table-title">Flujo de eventos <span class="muted">(más reciente arriba)</span></div>
+          <div id="stream-feed" class="feed"></div>
+        </div>
+      </section>
+
+      <!-- VISTA: COMPARAR -->
+      <section class="view" id="view-comparar">
+        <div class="toolbar">
+          <button class="btn btn-primary" id="btn-comparar">Ejecutar comparación</button>
+          <span class="status" id="comparar-status"></span>
+        </div>
+        <div class="compare">
+          <div class="compare-col">
+            <div class="compare-head">Simuladores (batch)</div>
+            <div id="cmp-batch" class="metrics-grid"></div>
+          </div>
+          <div class="compare-col">
+            <div class="compare-head">Streaming (muestra en vivo)</div>
+            <div id="cmp-stream" class="metrics-grid"></div>
+          </div>
+        </div>
+        <div class="compare-note muted">
+          El batch reconstruye datos históricos de forma determinística por ventana;
+          el streaming emite eventos aleatorios en tiempo real con pesos
+          <b>50% vibración · 35% pasajeros · 15% clima</b>.
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
