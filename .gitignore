@@ -6,8 +6,12 @@ __pycache__/
 # Data outputs & Synthetic data (too large for git)
 datos_sinteticos/
 datos_streaming/
+datos_frontend/
 *.csv
 *.ndjson
+
+# Virtual env de pruebas del frontend
+.venv-test/
 
 # Environments & IDEs
 .venv/

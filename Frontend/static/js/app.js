@@ -1,11 +1,13 @@
-/* Interfaz de MetroLake: navegacion, batch, streaming y comparacion. */
+/* Interfaz de MetroLake · Metro de Medellín.
+   Vistas: panel, batch, streaming, consultas (H05) y comparar días (H05). */
 "use strict";
 
 const VISTAS = {
   panel: { titulo: "Panel general", desc: "Vista rápida del sistema de simulación." },
   batch: { titulo: "Simuladores (batch)", desc: "Genera un lote histórico con los tres simuladores." },
   streaming: { titulo: "Streaming en vivo", desc: "Eventos emitidos en tiempo real, fuente aleatoria." },
-  comparar: { titulo: "Comparar", desc: "Simuladores batch frente a streaming, lado a lado." },
+  consultas: { titulo: "Consultas y trazabilidad", desc: "Busca por día los datos almacenados y revísalos en tabla." },
+  comparar: { titulo: "Comparar días", desc: "Guarda sesiones y compara el Día A contra el Día B." },
 };
 
 const CLASE_FUENTE = { pasajeros: "b-pasajeros", vibracion: "b-vibracion", clima: "b-clima" };
@@ -20,6 +22,8 @@ function activarVista(nombre) {
   );
   document.getElementById("view-title").textContent = VISTAS[nombre].titulo;
   document.getElementById("view-desc").textContent = VISTAS[nombre].desc;
+  // Al entrar a consultas o comparar, refresca la lista de dias disponibles.
+  if (nombre === "consultas" || nombre === "comparar") cargarDias();
 }
 
 document.querySelectorAll(".menu-item").forEach((b) =>
@@ -32,7 +36,7 @@ function fmt(v) {
   if (v && typeof v === "object") {
     return Object.entries(v).map(([k, n]) => `${k}: ${n}`).join(" · ");
   }
-  return v;
+  return v === undefined || v === null ? "—" : v;
 }
 
 const ETIQUETAS = {
@@ -43,9 +47,16 @@ const ETIQUETAS = {
   anomalias: "Anomalías", sensores_distintos: "Sensores", fatiga_maxima: "Fatiga máx",
   precipitacion_promedio_mm_h: "Lluvia media mm/h", precipitacion_maxima_mm_h: "Lluvia máx mm/h",
   lecturas_con_lluvia: "Con lluvia", niveles_alerta: "Alertas", pluviometros_distintos: "Pluviómetros",
+  eventos: "Eventos", entradas: "Entradas", salidas: "Salidas",
+  por_tipo: "Por fuente", por_origen: "Por origen",
 };
 
 function grupoMetricas(titulo, tagClase, resumen) {
+  if (!resumen || !Object.keys(resumen).length) {
+    return `<div class="metric-group"><div class="metric-group-title">
+      <span class="tag ${tagClase}">${titulo}</span></div>
+      <div class="muted">Sin datos.</div></div>`;
+  }
   const items = Object.entries(resumen)
     .map(([k, v]) => `<div class="metric"><b>${fmt(v)}</b><span>${ETIQUETAS[k] || k}</span></div>`)
     .join("");
@@ -75,8 +86,7 @@ function filaEvento(ev, tipo, cssBorde) {
 /* ---------- Estado / configuracion ---------- */
 async function cargarEstado() {
   try {
-    const r = await fetch("/api/estado");
-    const d = await r.json();
+    const d = await (await fetch("/api/estado")).json();
     document.getElementById("cfg-estaciones").textContent = d.total_estaciones;
     document.getElementById("cfg-tramos").textContent = d.total_tramos;
     document.getElementById("cfg-sensores").textContent = d.total_sensores;
@@ -87,32 +97,33 @@ async function cargarEstado() {
 }
 
 /* ---------- Batch ---------- */
-async function ejecutarBatch(destinoResumen, destinoMuestras, statusEl) {
-  const minutos = document.getElementById("batch-minutos")?.value || 30;
+async function ejecutarBatch() {
+  const minutos = document.getElementById("batch-minutos").value;
+  const statusEl = document.getElementById("batch-status");
   statusEl.textContent = "Generando…";
-  const r = await fetch(`/api/batch?minutos=${minutos}`);
-  const d = await r.json();
-  renderResumen(destinoResumen, d.resumen);
-  if (destinoMuestras) {
-    const filas = [];
-    for (const tipo of ["pasajeros", "vibracion", "clima"]) {
-      (d.muestras[tipo] || []).forEach((ev) =>
-        filas.push(filaEvento(ev, tipo, CLASE_FUENTE[tipo]))
-      );
-    }
-    destinoMuestras.innerHTML = filas.join("");
+  const d = await (await fetch(`/api/batch?minutos=${minutos}`)).json();
+  renderResumen(document.getElementById("batch-resumen"), d.resumen);
+  const filas = [];
+  for (const tipo of ["pasajeros", "vibracion", "clima"]) {
+    (d.muestras[tipo] || []).forEach((ev) => filas.push(filaEvento(ev, tipo, CLASE_FUENTE[tipo])));
   }
+  document.getElementById("batch-muestras").innerHTML = filas.join("");
   statusEl.textContent = `Listo · ventana ${d.ventana_min} min`;
-  return d;
 }
 
-document.getElementById("btn-batch").addEventListener("click", () =>
-  ejecutarBatch(
-    document.getElementById("batch-resumen"),
-    document.getElementById("batch-muestras"),
-    document.getElementById("batch-status")
-  )
-);
+async function guardarBatch() {
+  const minutos = document.getElementById("batch-minutos").value;
+  const statusEl = document.getElementById("batch-status");
+  statusEl.textContent = "Guardando…";
+  const r = await fetch(`/api/guardar/batch?minutos=${minutos}`, { method: "POST" });
+  const d = await r.json();
+  statusEl.textContent = d.guardado
+    ? `💾 Guardado · ${d.eventos} eventos → ${d.ruta}`
+    : `No se pudo guardar: ${d.motivo || "error"}`;
+}
+
+document.getElementById("btn-batch").addEventListener("click", ejecutarBatch);
+document.getElementById("btn-batch-save").addEventListener("click", guardarBatch);
 
 /* ---------- Streaming ---------- */
 let streamTimer = null;
@@ -128,8 +139,7 @@ function actualizarConteos() {
 
 async function tickStreaming() {
   try {
-    const r = await fetch("/api/streaming/evento");
-    const ev = await r.json();
+    const ev = await (await fetch("/api/streaming/evento")).json();
     const tipo = ev._tipo_fuente;
     conteo[tipo] = (conteo[tipo] || 0) + 1;
     actualizarConteos();
@@ -161,77 +171,141 @@ function detenerStreaming() {
   s.textContent = "Detenido"; s.classList.remove("live");
 }
 
+async function guardarStreaming() {
+  const statusEl = document.getElementById("stream-status");
+  const r = await fetch("/api/guardar/streaming", { method: "POST" });
+  const d = await r.json();
+  statusEl.classList.remove("live");
+  statusEl.textContent = d.guardado
+    ? `💾 Guardado · ${d.eventos} eventos → ${d.ruta}`
+    : `Nada que guardar (${d.motivo || "sin eventos"})`;
+}
+
 document.getElementById("btn-stream-start").addEventListener("click", iniciarStreaming);
 document.getElementById("btn-stream-stop").addEventListener("click", detenerStreaming);
+document.getElementById("btn-stream-save").addEventListener("click", guardarStreaming);
 document.getElementById("stream-intervalo").addEventListener("change", () => {
   if (streamTimer) { detenerStreaming(); iniciarStreaming(); }
 });
 
-/* ---------- Comparar ---------- */
-async function ejecutarComparacion() {
-  const status = document.getElementById("comparar-status");
-  status.textContent = "Procesando…";
+/* ---------- Consultas (H05) ---------- */
+let filasActuales = [];   // cache de la ultima consulta, para el buscador
 
-  // Lado batch: reutiliza el endpoint batch (ventana de 30 min).
-  const rb = await fetch("/api/batch?minutos=30");
-  const db = await rb.json();
-  renderResumen(document.getElementById("cmp-batch"), db.resumen);
-
-  // Lado streaming: recolecta una muestra de eventos en vivo y la resume.
-  const muestra = { pasajeros: [], vibracion: [], clima: [] };
-  for (let i = 0; i < 60; i++) {
-    const r = await fetch("/api/streaming/evento");
-    const ev = await r.json();
-    muestra[ev._tipo_fuente].push(ev);
+async function cargarDias() {
+  try {
+    const d = await (await fetch("/api/consultas/dias")).json();
+    const dias = d.dias || [];
+    const opciones = dias.length
+      ? dias.map((x) => `<option value="${x}">${x}</option>`).join("")
+      : `<option value="">— sin datos —</option>`;
+    for (const id of ["q-dia", "cmp-dia-a", "cmp-dia-b"]) {
+      const sel = document.getElementById(id);
+      if (sel) {
+        const previo = sel.value;
+        sel.innerHTML = opciones;
+        if (dias.includes(previo)) sel.value = previo;
+      }
+    }
+    // Por comodidad, deja A y B en dias distintos si hay al menos dos.
+    if (dias.length >= 2) {
+      document.getElementById("cmp-dia-a").value = dias[0];
+      document.getElementById("cmp-dia-b").value = dias[1];
+    }
+  } catch (e) {
+    console.error("No se pudieron cargar los días:", e);
   }
-  renderResumen(document.getElementById("cmp-stream"), {
-    pasajeros: resumirPasajeros(muestra.pasajeros),
-    vibracion: resumirVibracion(muestra.vibracion),
-    clima: resumirClima(muestra.clima),
-  });
-  status.textContent = "Comparación lista · 30 min batch vs 60 eventos live";
 }
 
-/* Resumenes en cliente para la muestra de streaming (equivalentes al backend). */
-function resumirPasajeros(evs) {
-  if (!evs.length) return { total_eventos: 0 };
-  const ent = evs.reduce((a, e) => a + e.entradas, 0);
-  const sal = evs.reduce((a, e) => a + e.salidas, 0);
-  const oc = evs.map((e) => e.ocupacion_estimada_pct);
-  return {
-    total_eventos: evs.length, total_entradas: ent, total_salidas: sal,
-    total_personas: ent + sal,
-    ocupacion_promedio_pct: +(oc.reduce((a, b) => a + b, 0) / oc.length).toFixed(1),
-    ocupacion_maxima_pct: Math.max(...oc),
-    eventos_hora_pico: evs.filter((e) => e.hora_pico).length,
-  };
-}
-function resumirVibracion(evs) {
-  if (!evs.length) return { total_eventos: 0 };
-  const rms = evs.map((e) => e.vibracion_rms_mm_s2);
-  return {
-    total_eventos: evs.length,
-    rms_promedio: +(rms.reduce((a, b) => a + b, 0) / rms.length).toFixed(4),
-    rms_maximo: Math.max(...rms),
-    anomalias: evs.filter((e) => e.es_anomalia).length,
-    sensores_distintos: new Set(evs.map((e) => e.sensor_id)).size,
-  };
-}
-function resumirClima(evs) {
-  if (!evs.length) return { total_eventos: 0 };
-  const p = evs.map((e) => e.precipitacion_mm_h);
-  const niveles = {};
-  evs.forEach((e) => (niveles[e.nivel_alerta] = (niveles[e.nivel_alerta] || 0) + 1));
-  return {
-    total_eventos: evs.length,
-    precipitacion_promedio_mm_h: +(p.reduce((a, b) => a + b, 0) / p.length).toFixed(2),
-    precipitacion_maxima_mm_h: Math.max(...p),
-    lecturas_con_lluvia: evs.filter((e) => e.esta_lloviendo).length,
-    niveles_alerta: niveles,
-  };
+const COLUMNAS = {
+  pasajeros: ["timestamp", "estacion", "entradas", "salidas", "total_personas", "ocupacion_estimada_pct", "hora_pico"],
+  vibracion: ["timestamp", "sensor_id", "tramo_id", "vibracion_rms_mm_s2", "frecuencia_hz", "fatiga_acumulada", "es_anomalia"],
+  clima: ["timestamp", "pluviometro_id", "nombre_estacion", "precipitacion_mm_h", "nivel_alerta", "esta_lloviendo"],
+  mixto: ["_tipo_fuente", "_origen", "timestamp", "event_id", "estacion", "sensor_id", "pluviometro_id"],
+};
+
+function renderTabla(filas, tipo) {
+  const tabla = document.getElementById("q-tabla");
+  const thead = tabla.querySelector("thead");
+  const tbody = tabla.querySelector("tbody");
+  if (!filas.length) {
+    thead.innerHTML = ""; tbody.innerHTML = `<tr><td class="muted">No hay datos para este filtro.</td></tr>`;
+    return;
+  }
+  const cols = (tipo !== "todos" && COLUMNAS[tipo]) ? COLUMNAS[tipo] : COLUMNAS.mixto;
+  thead.innerHTML = "<tr>" + cols.map((c) => `<th>${c.replace(/^_/, "")}</th>`).join("") + "</tr>";
+  tbody.innerHTML = filas.slice(0, 500).map((f) => {
+    return "<tr>" + cols.map((c) => {
+      let v = f[c];
+      if (c === "_tipo_fuente" && v) return `<td><span class="pill pill-${v}">${v}</span></td>`;
+      if (c === "_origen" && v) return `<td><span class="pill pill-origen">${v}</span></td>`;
+      return `<td>${v === undefined || v === null ? "" : fmt(v)}</td>`;
+    }).join("") + "</tr>";
+  }).join("");
 }
 
-document.getElementById("btn-comparar").addEventListener("click", ejecutarComparacion);
+function renderResumenConsulta(resumen) {
+  const cont = document.getElementById("q-resumen");
+  const general = { total_eventos: resumen.total_eventos, por_tipo: resumen.por_tipo, por_origen: resumen.por_origen };
+  cont.innerHTML =
+    grupoMetricas("Resumen del día", "tag-clima", general) +
+    (resumen.pasajeros ? grupoMetricas("Pasajeros", "tag-pasajeros", resumen.pasajeros) : "") +
+    (resumen.vibracion ? grupoMetricas("Vibración", "tag-vibracion", resumen.vibracion) : "") +
+    (resumen.clima ? grupoMetricas("Clima", "tag-clima", resumen.clima) : "");
+}
+
+async function consultarDia() {
+  const dia = document.getElementById("q-dia").value;
+  const origen = document.getElementById("q-origen").value;
+  const tipo = document.getElementById("q-tipo").value;
+  const statusEl = document.getElementById("q-status");
+  if (!dia) { statusEl.textContent = "Selecciona un día."; return; }
+  statusEl.textContent = "Consultando…";
+  const d = await (await fetch(`/api/consultas/dia?dia=${dia}&origen=${origen}&tipo=${tipo}`)).json();
+  filasActuales = d.filas || [];
+  renderResumenConsulta(d.resumen);
+  aplicarBuscador(tipo);
+  document.getElementById("q-count").textContent = `· ${d.total.toLocaleString("es")} eventos`;
+  statusEl.textContent = `Listo · ${dia}`;
+}
+
+function aplicarBuscador(tipo) {
+  const q = document.getElementById("q-buscar").value.trim().toLowerCase();
+  const tipoActual = tipo || document.getElementById("q-tipo").value;
+  const filtradas = q
+    ? filasActuales.filter((f) => JSON.stringify(f).toLowerCase().includes(q))
+    : filasActuales;
+  renderTabla(filtradas, tipoActual);
+}
+
+document.getElementById("btn-consultar").addEventListener("click", consultarDia);
+document.getElementById("btn-refrescar-dias").addEventListener("click", cargarDias);
+document.getElementById("q-buscar").addEventListener("input", () => aplicarBuscador());
+
+/* ---------- Comparar días A vs B (H05) ---------- */
+async function compararDias() {
+  const a = document.getElementById("cmp-dia-a").value;
+  const b = document.getElementById("cmp-dia-b").value;
+  const statusEl = document.getElementById("comparar-status");
+  if (!a || !b) { statusEl.textContent = "Selecciona ambos días."; return; }
+  statusEl.textContent = "Comparando…";
+  const d = await (await fetch(`/api/consultas/comparar?dia_a=${a}&dia_b=${b}`)).json();
+  document.getElementById("cmp-head-a").textContent = `Día ${a}`;
+  document.getElementById("cmp-head-b").textContent = `Día ${b}`;
+  renderResumenComparacion(document.getElementById("cmp-a"), d.dia_a.resumen);
+  renderResumenComparacion(document.getElementById("cmp-b"), d.dia_b.resumen);
+  statusEl.textContent = "Comparación lista";
+}
+
+function renderResumenComparacion(cont, resumen) {
+  const general = { total_eventos: resumen.total_eventos, por_tipo: resumen.por_tipo, por_origen: resumen.por_origen };
+  cont.innerHTML =
+    grupoMetricas("Resumen", "tag-clima", general) +
+    (resumen.pasajeros ? grupoMetricas("Pasajeros", "tag-pasajeros", resumen.pasajeros) : "") +
+    (resumen.vibracion ? grupoMetricas("Vibración", "tag-vibracion", resumen.vibracion) : "") +
+    (resumen.clima ? grupoMetricas("Clima", "tag-clima", resumen.clima) : "");
+}
+
+document.getElementById("btn-comparar").addEventListener("click", compararDias);
 
 /* ---------- Init ---------- */
 cargarEstado();

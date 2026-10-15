@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MetroLake · Simulador</title>
+  <title>MetroLake · Simulador Metro de Medellín</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
@@ -16,22 +16,25 @@
         <div class="brand-logo">M</div>
         <div>
           <div class="brand-name">MetroLake</div>
-          <div class="brand-sub">Simulador de datos</div>
+          <div class="brand-sub">Metro de Medellín</div>
         </div>
       </div>
 
       <nav class="menu">
         <button class="menu-item active" data-view="panel">
-          <span class="dot"></span> Panel general
+          <span class="ico">▦</span> Panel general
         </button>
         <button class="menu-item" data-view="batch">
-          <span class="dot"></span> Simuladores (batch)
+          <span class="ico">▤</span> Simuladores (batch)
         </button>
         <button class="menu-item" data-view="streaming">
-          <span class="dot"></span> Streaming en vivo
+          <span class="ico">⟳</span> Streaming en vivo
+        </button>
+        <button class="menu-item" data-view="consultas">
+          <span class="ico">🔍</span> Consultas y trazabilidad
         </button>
         <button class="menu-item" data-view="comparar">
-          <span class="dot"></span> Comparar
+          <span class="ico">⇄</span> Comparar días
         </button>
       </nav>
 
@@ -43,7 +46,7 @@
         <div class="info-row"><span>Pluviómetros</span><b id="cfg-pluviometros">—</b></div>
       </div>
 
-      <div class="sidebar-foot">Metro de Medellín · demo</div>
+      <div class="sidebar-foot">Sistema de datos · demo</div>
     </aside>
 
     <!-- Contenido -->
@@ -77,8 +80,8 @@
           </article>
         </div>
         <div class="panel-note">
-          Usa el menú para <b>generar un lote batch</b>, ver el <b>streaming en vivo</b>,
-          o <b>comparar</b> ambos modos lado a lado.
+          Genera datos en <b>batch</b> o <b>streaming</b>, pulsa <b>Guardar</b> para almacenarlos,
+          y luego usa <b>Consultas</b> para buscarlos por día o <b>Comparar días</b> (A vs B).
         </div>
       </section>
 
@@ -94,6 +97,7 @@
             </select>
           </label>
           <button class="btn btn-primary" id="btn-batch">Generar lote batch</button>
+          <button class="btn btn-save" id="btn-batch-save">💾 Guardar</button>
           <span class="status" id="batch-status"></span>
         </div>
         <div id="batch-resumen" class="metrics-grid"></div>
@@ -115,6 +119,7 @@
               <option value="300">Rápido (0.3s)</option>
             </select>
           </label>
+          <button class="btn btn-save" id="btn-stream-save">💾 Guardar sesión</button>
           <span class="status" id="stream-status">Detenido</span>
         </div>
         <div class="stream-counts">
@@ -129,26 +134,71 @@
         </div>
       </section>
 
-      <!-- VISTA: COMPARAR -->
+      <!-- VISTA: CONSULTAS -->
+      <section class="view" id="view-consultas">
+        <div class="toolbar">
+          <label>Día
+            <select id="q-dia"><option value="">— sin datos —</option></select>
+          </label>
+          <label>Origen
+            <select id="q-origen">
+              <option value="todos">Todos</option>
+              <option value="sintetico">Sintéticos (batch)</option>
+              <option value="streaming">Streaming</option>
+              <option value="frontend">Guardados aquí</option>
+            </select>
+          </label>
+          <label>Fuente
+            <select id="q-tipo">
+              <option value="todos">Todas</option>
+              <option value="pasajeros">Pasajeros</option>
+              <option value="vibracion">Vibración</option>
+              <option value="clima">Clima</option>
+            </select>
+          </label>
+          <input type="text" id="q-buscar" class="search" placeholder="Buscar en la tabla…" />
+          <button class="btn btn-primary" id="btn-consultar">Consultar</button>
+          <button class="btn" id="btn-refrescar-dias" title="Actualizar lista de días">↻</button>
+          <span class="status" id="q-status"></span>
+        </div>
+        <div id="q-resumen" class="metrics-grid"></div>
+        <div class="table-wrap">
+          <div class="table-title">Datos almacenados <span class="muted" id="q-count"></span></div>
+          <div class="data-table-wrap">
+            <table class="data-table" id="q-tabla">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VISTA: COMPARAR DIAS -->
       <section class="view" id="view-comparar">
         <div class="toolbar">
-          <button class="btn btn-primary" id="btn-comparar">Ejecutar comparación</button>
+          <label>Día A
+            <select id="cmp-dia-a"><option value="">—</option></select>
+          </label>
+          <label>Día B
+            <select id="cmp-dia-b"><option value="">—</option></select>
+          </label>
+          <button class="btn btn-primary" id="btn-comparar">Comparar A vs B</button>
           <span class="status" id="comparar-status"></span>
         </div>
         <div class="compare">
           <div class="compare-col">
-            <div class="compare-head">Simuladores (batch)</div>
-            <div id="cmp-batch" class="metrics-grid"></div>
+            <div class="compare-head"><span class="badge-a">A</span> <span id="cmp-head-a">Día A</span></div>
+            <div id="cmp-a" class="metrics-grid"></div>
           </div>
           <div class="compare-col">
-            <div class="compare-head">Streaming (muestra en vivo)</div>
-            <div id="cmp-stream" class="metrics-grid"></div>
+            <div class="compare-head"><span class="badge-b">B</span> <span id="cmp-head-b">Día B</span></div>
+            <div id="cmp-b" class="metrics-grid"></div>
           </div>
         </div>
         <div class="compare-note muted">
-          El batch reconstruye datos históricos de forma determinística por ventana;
-          el streaming emite eventos aleatorios en tiempo real con pesos
-          <b>50% vibración · 35% pasajeros · 15% clima</b>.
+          Guarda sesiones (batch o streaming) en días distintos y compáralas aquí.
+          También se incluyen los datos generados por el proyecto en
+          <code>datos_sinteticos/</code> y <code>datos_streaming/</code>.
         </div>
       </section>
     </main>

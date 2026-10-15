@@ -25,6 +25,11 @@ from Fuentes.accelerometer import SimuladorAcelerometro  # noqa: E402
 from Fuentes.turnstiles import SimuladorTorniquetes  # noqa: E402
 from Fuentes.weather import SimuladorClima  # noqa: E402
 
+try:  # funciona tanto con `python Frontend/app.py` como con `-m Frontend.app`
+    from . import consultas
+except ImportError:
+    import consultas  # noqa: E402
+
 app = Flask(__name__)
 
 # Instancias unicas: conservan perfiles de estaciones y sensores entre peticiones.
@@ -33,6 +38,9 @@ _sim_pasajeros = SimuladorTorniquetes()
 _sim_clima = SimuladorClima()
 
 PESOS_STREAMING = {"vibracion": 0.5, "pasajeros": 0.35, "clima": 0.15}
+
+# Buffer en memoria de los eventos de streaming emitidos desde el ultimo guardado.
+_buffer_streaming = []
 
 
 def _resumir_pasajeros(eventos):
@@ -155,7 +163,80 @@ def streaming_evento():
         evento = _sim_clima.generar_lectura(timestamp=ts)
 
     evento["_tipo_fuente"] = tipo
+    _buffer_streaming.append(evento)
     return jsonify(evento)
+
+
+# ---------------------------------------------------------------------------
+# HU H05: guardar sesiones y consultar / comparar datos almacenados por dia.
+# ---------------------------------------------------------------------------
+
+
+@app.route("/api/guardar/batch", methods=["POST"])
+def guardar_batch():
+    """Genera un lote batch y lo guarda en datos_frontend/ para consultarlo luego."""
+    minutos = max(1, min(int(request.args.get("minutos", 30)), 240))
+    inicio = datetime.now().replace(second=0, microsecond=0) - timedelta(minutes=minutos)
+    eventos = []
+    for ev in _sim_pasajeros.generar_lote(n_minutos=minutos, inicio=inicio):
+        ev["_tipo_fuente"] = "pasajeros"
+        eventos.append(ev)
+    for ev in _sim_vibracion.generar_lote(n=minutos * 2, inicio=inicio, intervalo_seg=30):
+        ev["_tipo_fuente"] = "vibracion"
+        eventos.append(ev)
+    for ev in _sim_clima.generar_lote(n_lecturas=max(1, minutos // 5), inicio=inicio, intervalo_min=5):
+        ev["_tipo_fuente"] = "clima"
+        eventos.append(ev)
+    ruta = consultas.guardar_sesion(eventos, modo="batch")
+    return jsonify({"guardado": True, "ruta": ruta, "eventos": len(eventos)})
+
+
+@app.route("/api/guardar/streaming", methods=["POST"])
+def guardar_streaming():
+    """Guarda los eventos de streaming acumulados en el buffer de la sesion."""
+    if not _buffer_streaming:
+        return jsonify({"guardado": False, "motivo": "sin eventos de streaming"}), 400
+    ruta = consultas.guardar_sesion(list(_buffer_streaming), modo="streaming")
+    total = len(_buffer_streaming)
+    _buffer_streaming.clear()
+    return jsonify({"guardado": True, "ruta": ruta, "eventos": total})
+
+
+@app.route("/api/consultas/dias")
+def consultas_dias():
+    """Lista los dias con datos almacenados (sinteticos, streaming y frontend)."""
+    return jsonify({"dias": consultas.listar_dias()})
+
+
+@app.route("/api/consultas/dia")
+def consultas_dia():
+    """Datos de un dia: tabla filtrable + resumen agregado."""
+    dia = request.args.get("dia", "")
+    origen = request.args.get("origen", "todos")
+    tipo = request.args.get("tipo", "todos")
+    limite = max(1, min(int(request.args.get("limite", 300)), 5000))
+
+    eventos = consultas.cargar_dia(dia, origen=origen)
+    if tipo != "todos":
+        eventos = [e for e in eventos if e.get("_tipo_fuente") == tipo]
+
+    return jsonify({
+        "dia": dia,
+        "total": len(eventos),
+        "resumen": consultas.resumir_dia(eventos),
+        "filas": eventos[:limite],
+    })
+
+
+@app.route("/api/consultas/comparar")
+def consultas_comparar():
+    """Compara dos dias (A vs B) devolviendo sus resumenes agregados."""
+    dia_a = request.args.get("dia_a", "")
+    dia_b = request.args.get("dia_b", "")
+    return jsonify({
+        "dia_a": {"dia": dia_a, "resumen": consultas.resumir_dia(consultas.cargar_dia(dia_a))},
+        "dia_b": {"dia": dia_b, "resumen": consultas.resumir_dia(consultas.cargar_dia(dia_b))},
+    })
 
 
 if __name__ == "__main__":
