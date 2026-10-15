@@ -1,0 +1,301 @@
+"""Servidor web de MetroLake.
+
+Expone una interfaz visual para simular el proyecto: ejecuta los mismos
+simuladores del sistema (torniquetes, vibracion y clima) tanto en modo
+batch (dataset historico) como en modo streaming, y permite compararlos.
+
+No duplica la logica de negocio: reutiliza directamente las clases y
+funciones existentes en `Fuentes/` y `Ejecucion/`.
+"""
+
+import os
+import random
+import sys
+from collections import Counter
+from datetime import datetime, timedelta
+
+from flask import Flask, jsonify, render_template, request
+
+# Permite importar los paquetes del proyecto al ejecutar desde cualquier ruta.
+RAIZ_PROYECTO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if RAIZ_PROYECTO not in sys.path:
+    sys.path.insert(0, RAIZ_PROYECTO)
+
+from Fuentes.accelerometer import SimuladorAcelerometro  # noqa: E402
+from Fuentes.turnstiles import SimuladorTorniquetes  # noqa: E402
+from Fuentes.weather import SimuladorClima  # noqa: E402
+
+try:  # funciona tanto con `python Frontend/app.py` como con `-m Frontend.app`
+    from . import consultas, riesgo
+except ImportError:
+    import consultas  # noqa: E402
+    import riesgo  # noqa: E402
+
+app = Flask(__name__)
+
+# Instancias unicas: conservan perfiles de estaciones y sensores entre peticiones.
+_sim_vibracion = SimuladorAcelerometro()
+_sim_pasajeros = SimuladorTorniquetes()
+_sim_clima = SimuladorClima()
+
+PESOS_STREAMING = {"vibracion": 0.5, "pasajeros": 0.35, "clima": 0.15}
+
+# Buffer en memoria de los eventos de streaming emitidos desde el ultimo guardado.
+_buffer_streaming = []
+
+
+def _resumir_pasajeros(eventos):
+    if not eventos:
+        return {}
+    total_entradas = sum(e["entradas"] for e in eventos)
+    total_salidas = sum(e["salidas"] for e in eventos)
+    ocupacion = [e["ocupacion_estimada_pct"] for e in eventos]
+    por_estacion = Counter(e["estacion"] for e in eventos)
+    top = max(por_estacion, key=por_estacion.get)
+    return {
+        "total_eventos": len(eventos),
+        "total_entradas": total_entradas,
+        "total_salidas": total_salidas,
+        "total_personas": total_entradas + total_salidas,
+        "ocupacion_promedio_pct": round(sum(ocupacion) / len(ocupacion), 1),
+        "ocupacion_maxima_pct": max(ocupacion),
+        "estacion_mas_activa": top,
+        "eventos_hora_pico": sum(1 for e in eventos if e["hora_pico"]),
+    }
+
+
+def _resumir_vibracion(eventos):
+    if not eventos:
+        return {}
+    rms = [e["vibracion_rms_mm_s2"] for e in eventos]
+    return {
+        "total_eventos": len(eventos),
+        "rms_promedio": round(sum(rms) / len(rms), 4),
+        "rms_maximo": max(rms),
+        "anomalias": sum(1 for e in eventos if e["es_anomalia"]),
+        "sensores_distintos": len({e["sensor_id"] for e in eventos}),
+        "fatiga_maxima": round(max(e["fatiga_acumulada"] for e in eventos), 4),
+    }
+
+
+def _resumir_clima(eventos):
+    if not eventos:
+        return {}
+    precip = [e["precipitacion_mm_h"] for e in eventos]
+    niveles = Counter(e["nivel_alerta"] for e in eventos)
+    return {
+        "total_eventos": len(eventos),
+        "precipitacion_promedio_mm_h": round(sum(precip) / len(precip), 2),
+        "precipitacion_maxima_mm_h": max(precip),
+        "lecturas_con_lluvia": sum(1 for e in eventos if e["esta_lloviendo"]),
+        "niveles_alerta": dict(niveles),
+        "pluviometros_distintos": len({e["pluviometro_id"] for e in eventos}),
+    }
+
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+
+@app.route("/api/estado")
+def estado():
+    """Metadatos de configuracion para poblar la interfaz."""
+    return jsonify({
+        "estaciones": _sim_pasajeros.estaciones,
+        "total_estaciones": len(_sim_pasajeros.estaciones),
+        "total_sensores": len(_sim_vibracion.sensores),
+        "total_tramos": len(_sim_vibracion.tramos),
+        "pluviometros": [p["nombre"] for p in _sim_clima.PLUVIOMETROS],
+        "pesos_streaming": PESOS_STREAMING,
+    })
+
+
+# Dias de la semana (0=lunes ... 6=domingo), como los interpreta datetime.weekday().
+DIAS_SEMANA = {
+    "lunes": 0, "martes": 1, "miercoles": 2, "jueves": 3,
+    "viernes": 4, "sabado": 5, "domingo": 6,
+}
+
+
+def _fecha_para_dia_semana(dia_semana):
+    """Devuelve la fecha mas reciente (hoy o antes) que cae en ese dia de la semana.
+
+    Si ``dia_semana`` no es valido, devuelve la fecha de hoy. Esto permite que el
+    batch simule un lunes, un domingo, etc., y que los simuladores apliquen su
+    logica de fin de semana / horas pico para ese dia concreto.
+    """
+    hoy = datetime.now().replace(hour=12, minute=0, second=0, microsecond=0)
+    objetivo = DIAS_SEMANA.get((dia_semana or "").lower())
+    if objetivo is None:
+        return hoy
+    retroceso = (hoy.weekday() - objetivo) % 7
+    return hoy - timedelta(days=retroceso)
+
+
+def _generar_lote_batch(minutos, dia_semana=None):
+    """Genera los eventos batch de las tres fuentes para un dia de la semana dado.
+
+    Reutiliza los mismos metodos ``generar_lote`` que usa ``dataset.py``. El
+    operacion comienza a las 05:00 del dia simulado, como en el proyecto.
+    """
+    fecha = _fecha_para_dia_semana(dia_semana)
+    inicio = fecha.replace(hour=5, minute=0, second=0, microsecond=0)
+    pasajeros = _sim_pasajeros.generar_lote(n_minutos=minutos, inicio=inicio)
+    vibracion = _sim_vibracion.generar_lote(n=minutos * 2, inicio=inicio, intervalo_seg=30)
+    clima = _sim_clima.generar_lote(n_lecturas=max(1, minutos // 5), inicio=inicio, intervalo_min=5)
+    return fecha, pasajeros, vibracion, clima
+
+
+@app.route("/api/batch")
+def batch():
+    """Genera un lote 'batch' (dataset historico) de las tres fuentes.
+
+    Acepta ``minutos`` (ventana) y ``dia_semana`` (lunes..domingo) para simular
+    un dia concreto de la semana.
+    """
+    minutos = max(1, min(int(request.args.get("minutos", 30)), 240))
+    dia_semana = request.args.get("dia_semana")
+    fecha, pasajeros, vibracion, clima = _generar_lote_batch(minutos, dia_semana)
+    n_estaciones = len(_sim_pasajeros.estaciones)
+
+    return jsonify({
+        "modo": "batch",
+        "ventana_min": minutos,
+        "dia_semana": fecha.strftime("%A"),
+        "fecha": fecha.strftime("%Y-%m-%d"),
+        "muestras": {
+            "pasajeros": pasajeros[: 3 * n_estaciones][-6:],
+            "vibracion": vibracion[-6:],
+            "clima": clima[-6:],
+        },
+        "resumen": {
+            "pasajeros": _resumir_pasajeros(pasajeros),
+            "vibracion": _resumir_vibracion(vibracion),
+            "clima": _resumir_clima(clima),
+        },
+    })
+
+
+@app.route("/api/streaming/evento")
+def streaming_evento():
+    """Emite un unico evento de streaming, igual que `modo_streaming`.
+
+    Selecciona una fuente al azar con los mismos pesos del proyecto y le
+    agrega el campo `_tipo_fuente`.
+    """
+    ts = datetime.now()
+    tipos = list(PESOS_STREAMING)
+    tipo = random.choices(tipos, weights=[PESOS_STREAMING[t] for t in tipos])[0]
+
+    if tipo == "vibracion":
+        evento = _sim_vibracion.generar_evento(timestamp=ts)
+    elif tipo == "pasajeros":
+        evento = _sim_pasajeros.generar_evento(timestamp=ts)
+    else:
+        evento = _sim_clima.generar_lectura(timestamp=ts)
+
+    evento["_tipo_fuente"] = tipo
+    _buffer_streaming.append(evento)
+    return jsonify(evento)
+
+
+# ---------------------------------------------------------------------------
+# HU H05: guardar sesiones y consultar / comparar datos almacenados por dia.
+# ---------------------------------------------------------------------------
+
+
+@app.route("/api/guardar/batch", methods=["POST"])
+def guardar_batch():
+    """Genera un lote batch de un dia de la semana y lo guarda en datos_frontend/.
+
+    Los datos se almacenan bajo la fecha simulada (ej. el ultimo lunes), de modo
+    que distintos dias de la semana queden en carpetas distintas y se puedan
+    comparar en 'Comparar dias'.
+    """
+    minutos = max(1, min(int(request.args.get("minutos", 30)), 240))
+    dia_semana = request.args.get("dia_semana")
+    fecha, pasajeros, vibracion, clima = _generar_lote_batch(minutos, dia_semana)
+
+    eventos = []
+    for ev in pasajeros:
+        ev["_tipo_fuente"] = "pasajeros"
+        eventos.append(ev)
+    for ev in vibracion:
+        ev["_tipo_fuente"] = "vibracion"
+        eventos.append(ev)
+    for ev in clima:
+        ev["_tipo_fuente"] = "clima"
+        eventos.append(ev)
+
+    ruta = consultas.guardar_sesion(eventos, modo="batch", fecha=fecha)
+    return jsonify({
+        "guardado": True, "ruta": ruta, "eventos": len(eventos),
+        "dia_semana": fecha.strftime("%A"), "fecha": fecha.strftime("%Y-%m-%d"),
+    })
+
+
+@app.route("/api/guardar/streaming", methods=["POST"])
+def guardar_streaming():
+    """Guarda los eventos de streaming acumulados en el buffer de la sesion."""
+    if not _buffer_streaming:
+        return jsonify({"guardado": False, "motivo": "sin eventos de streaming"}), 400
+    ruta = consultas.guardar_sesion(list(_buffer_streaming), modo="streaming")
+    total = len(_buffer_streaming)
+    _buffer_streaming.clear()
+    return jsonify({"guardado": True, "ruta": ruta, "eventos": total})
+
+
+@app.route("/api/consultas/dias")
+def consultas_dias():
+    """Lista los dias con datos almacenados (sinteticos, streaming y frontend)."""
+    return jsonify({"dias": consultas.listar_dias()})
+
+
+@app.route("/api/consultas/dia")
+def consultas_dia():
+    """Datos de un dia: tabla filtrable + resumen agregado."""
+    dia = request.args.get("dia", "")
+    origen = request.args.get("origen", "todos")
+    tipo = request.args.get("tipo", "todos")
+    limite = max(1, min(int(request.args.get("limite", 300)), 5000))
+
+    eventos = consultas.cargar_dia(dia, origen=origen)
+    if tipo != "todos":
+        eventos = [e for e in eventos if e.get("_tipo_fuente") == tipo]
+
+    return jsonify({
+        "dia": dia,
+        "total": len(eventos),
+        "resumen": consultas.resumir_dia(eventos),
+        "filas": eventos[:limite],
+    })
+
+
+@app.route("/api/consultas/comparar")
+def consultas_comparar():
+    """Compara dos dias (A vs B) devolviendo sus resumenes agregados."""
+    dia_a = request.args.get("dia_a", "")
+    dia_b = request.args.get("dia_b", "")
+    return jsonify({
+        "dia_a": {"dia": dia_a, "resumen": consultas.resumir_dia(consultas.cargar_dia(dia_a))},
+        "dia_b": {"dia": dia_b, "resumen": consultas.resumir_dia(consultas.cargar_dia(dia_b))},
+    })
+
+
+@app.route("/api/riesgo/dia")
+def riesgo_dia():
+    """Evalua el nivel de riesgo operativo (alto/medio/bajo) de un dia."""
+    dia = request.args.get("dia", "")
+    eventos = consultas.cargar_dia(dia)
+    evaluacion = riesgo.evaluar_riesgo(eventos)
+    evaluacion["dia"] = dia
+    evaluacion["total_eventos"] = len(eventos)
+    return jsonify(evaluacion)
+
+
+if __name__ == "__main__":
+    # Puerto por defecto 8080 (evita el 5000, reservado o en uso en algunos
+    # equipos). Se puede sobreescribir con la variable de entorno PORT.
+    puerto = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=puerto, debug=True)
