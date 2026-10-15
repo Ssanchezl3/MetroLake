@@ -240,5 +240,7 @@ def consultas_comparar():
 
 
 if __name__ == "__main__":
-    puerto = int(os.environ.get("PORT", 5000))
+    # Puerto por defecto 8080 (evita el 5000, reservado o en uso en algunos
+    # equipos). Se puede sobreescribir con la variable de entorno PORT.
+    puerto = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=puerto, debug=True)

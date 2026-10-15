@@ -37,12 +37,20 @@ python -m pip install -r Frontend/requirements.txt
 python Frontend/app.py
 ```
 
-Luego abre <http://localhost:5000> en el navegador.
+Luego abre <http://localhost:8080> en el navegador.
 
-El puerto se puede cambiar con la variable de entorno `PORT`:
+El puerto por defecto es **8080**. Se puede cambiar con la variable de entorno
+`PORT` (por ejemplo si ese puerto ya está en uso):
 
 ```bash
-PORT=8080 python Frontend/app.py
+# macOS / Linux
+PORT=8000 python Frontend/app.py
+```
+
+```powershell
+# Windows PowerShell
+$env:PORT=8000
+python Frontend\app.py
 ```
 
 ## Estructura
