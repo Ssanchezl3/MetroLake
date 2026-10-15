@@ -26,9 +26,10 @@ from Fuentes.turnstiles import SimuladorTorniquetes  # noqa: E402
 from Fuentes.weather import SimuladorClima  # noqa: E402
 
 try:  # funciona tanto con `python Frontend/app.py` como con `-m Frontend.app`
-    from . import consultas
+    from . import consultas, riesgo
 except ImportError:
     import consultas  # noqa: E402
+    import riesgo  # noqa: E402
 
 app = Flask(__name__)
 
@@ -110,27 +111,59 @@ def estado():
     })
 
 
+# Dias de la semana (0=lunes ... 6=domingo), como los interpreta datetime.weekday().
+DIAS_SEMANA = {
+    "lunes": 0, "martes": 1, "miercoles": 2, "jueves": 3,
+    "viernes": 4, "sabado": 5, "domingo": 6,
+}
+
+
+def _fecha_para_dia_semana(dia_semana):
+    """Devuelve la fecha mas reciente (hoy o antes) que cae en ese dia de la semana.
+
+    Si ``dia_semana`` no es valido, devuelve la fecha de hoy. Esto permite que el
+    batch simule un lunes, un domingo, etc., y que los simuladores apliquen su
+    logica de fin de semana / horas pico para ese dia concreto.
+    """
+    hoy = datetime.now().replace(hour=12, minute=0, second=0, microsecond=0)
+    objetivo = DIAS_SEMANA.get((dia_semana or "").lower())
+    if objetivo is None:
+        return hoy
+    retroceso = (hoy.weekday() - objetivo) % 7
+    return hoy - timedelta(days=retroceso)
+
+
+def _generar_lote_batch(minutos, dia_semana=None):
+    """Genera los eventos batch de las tres fuentes para un dia de la semana dado.
+
+    Reutiliza los mismos metodos ``generar_lote`` que usa ``dataset.py``. El
+    operacion comienza a las 05:00 del dia simulado, como en el proyecto.
+    """
+    fecha = _fecha_para_dia_semana(dia_semana)
+    inicio = fecha.replace(hour=5, minute=0, second=0, microsecond=0)
+    pasajeros = _sim_pasajeros.generar_lote(n_minutos=minutos, inicio=inicio)
+    vibracion = _sim_vibracion.generar_lote(n=minutos * 2, inicio=inicio, intervalo_seg=30)
+    clima = _sim_clima.generar_lote(n_lecturas=max(1, minutos // 5), inicio=inicio, intervalo_min=5)
+    return fecha, pasajeros, vibracion, clima
+
+
 @app.route("/api/batch")
 def batch():
     """Genera un lote 'batch' (dataset historico) de las tres fuentes.
 
-    Reutiliza los mismos metodos `generar_lote` que usa `dataset.py`.
+    Acepta ``minutos`` (ventana) y ``dia_semana`` (lunes..domingo) para simular
+    un dia concreto de la semana.
     """
     minutos = max(1, min(int(request.args.get("minutos", 30)), 240))
-    inicio = datetime.now().replace(second=0, microsecond=0) - timedelta(minutes=minutos)
-
+    dia_semana = request.args.get("dia_semana")
+    fecha, pasajeros, vibracion, clima = _generar_lote_batch(minutos, dia_semana)
     n_estaciones = len(_sim_pasajeros.estaciones)
-    pasajeros = _sim_pasajeros.generar_lote(n_minutos=minutos, inicio=inicio)
-    vibracion = _sim_vibracion.generar_lote(
-        n=minutos * 2, inicio=inicio, intervalo_seg=30
-    )
-    clima = _sim_clima.generar_lote(
-        n_lecturas=max(1, minutos // 5), inicio=inicio, intervalo_min=5
-    )
 
     return jsonify({
         "modo": "batch",
         "ventana_min": minutos,
+        "dia_semana": fecha.strftime("%A"),
+        "fecha": fecha.strftime("%Y-%m-%d"),
         "muestras": {
             "pasajeros": pasajeros[: 3 * n_estaciones][-6:],
             "vibracion": vibracion[-6:],
@@ -174,21 +207,32 @@ def streaming_evento():
 
 @app.route("/api/guardar/batch", methods=["POST"])
 def guardar_batch():
-    """Genera un lote batch y lo guarda en datos_frontend/ para consultarlo luego."""
+    """Genera un lote batch de un dia de la semana y lo guarda en datos_frontend/.
+
+    Los datos se almacenan bajo la fecha simulada (ej. el ultimo lunes), de modo
+    que distintos dias de la semana queden en carpetas distintas y se puedan
+    comparar en 'Comparar dias'.
+    """
     minutos = max(1, min(int(request.args.get("minutos", 30)), 240))
-    inicio = datetime.now().replace(second=0, microsecond=0) - timedelta(minutes=minutos)
+    dia_semana = request.args.get("dia_semana")
+    fecha, pasajeros, vibracion, clima = _generar_lote_batch(minutos, dia_semana)
+
     eventos = []
-    for ev in _sim_pasajeros.generar_lote(n_minutos=minutos, inicio=inicio):
+    for ev in pasajeros:
         ev["_tipo_fuente"] = "pasajeros"
         eventos.append(ev)
-    for ev in _sim_vibracion.generar_lote(n=minutos * 2, inicio=inicio, intervalo_seg=30):
+    for ev in vibracion:
         ev["_tipo_fuente"] = "vibracion"
         eventos.append(ev)
-    for ev in _sim_clima.generar_lote(n_lecturas=max(1, minutos // 5), inicio=inicio, intervalo_min=5):
+    for ev in clima:
         ev["_tipo_fuente"] = "clima"
         eventos.append(ev)
-    ruta = consultas.guardar_sesion(eventos, modo="batch")
-    return jsonify({"guardado": True, "ruta": ruta, "eventos": len(eventos)})
+
+    ruta = consultas.guardar_sesion(eventos, modo="batch", fecha=fecha)
+    return jsonify({
+        "guardado": True, "ruta": ruta, "eventos": len(eventos),
+        "dia_semana": fecha.strftime("%A"), "fecha": fecha.strftime("%Y-%m-%d"),
+    })
 
 
 @app.route("/api/guardar/streaming", methods=["POST"])
@@ -237,6 +281,17 @@ def consultas_comparar():
         "dia_a": {"dia": dia_a, "resumen": consultas.resumir_dia(consultas.cargar_dia(dia_a))},
         "dia_b": {"dia": dia_b, "resumen": consultas.resumir_dia(consultas.cargar_dia(dia_b))},
     })
+
+
+@app.route("/api/riesgo/dia")
+def riesgo_dia():
+    """Evalua el nivel de riesgo operativo (alto/medio/bajo) de un dia."""
+    dia = request.args.get("dia", "")
+    eventos = consultas.cargar_dia(dia)
+    evaluacion = riesgo.evaluar_riesgo(eventos)
+    evaluacion["dia"] = dia
+    evaluacion["total_eventos"] = len(eventos)
+    return jsonify(evaluacion)
 
 
 if __name__ == "__main__":

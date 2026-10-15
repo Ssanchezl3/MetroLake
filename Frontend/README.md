@@ -10,9 +10,11 @@ Un menú lateral con cinco vistas, con el diseño visual del **Metro de Medellí
 (verde institucional y naranja de acento):
 
 - **Panel general** — resumen de las tres fuentes de datos.
-- **Simuladores (batch)** — genera un lote histórico por ventana de tiempo y
-  muestra métricas y las últimas muestras generadas. Botón **Guardar** para
-  persistir el lote.
+- **Simuladores (batch)** — genera un lote histórico eligiendo el **día de la
+  semana** (lunes–domingo) y la ventana de tiempo. Los simuladores aplican su
+  lógica de fin de semana / horas pico, así que un lunes y un domingo producen
+  datos distintos. Botón **Guardar** para persistir el lote bajo la fecha de ese
+  día (lo que permite compararlos luego).
 - **Streaming en vivo** — emite eventos en tiempo real con los mismos pesos del
   proyecto (50% vibración · 35% pasajeros · 15% clima) y un contador por fuente.
   Botón **Guardar sesión** para persistir los eventos emitidos.
@@ -20,7 +22,11 @@ Un menú lateral con cinco vistas, con el diseño visual del **Metro de Medellí
   almacenados, filtra por **origen** (sintéticos / streaming / guardados) y por
   **fuente**, y los revisa en una **tabla** con buscador de texto.
 - **Comparar días** (HU H05) — selecciona **Día A** y **Día B** (guardados) y
-  compara sus resúmenes lado a lado.
+  compara sus resúmenes lado a lado (p. ej. lunes vs domingo).
+- **Riesgo Diario** — evalúa el nivel de riesgo operativo de un día
+  (**BAJO / MEDIO / ALTO**) con un puntaje y la explicación de los criterios:
+  infraestructura (anomalías y RMS de vibración, fatiga), clima (precipitación y
+  alertas) y demanda (ocupación y volumen de pasajeros).
 
 ## Dónde se guardan los datos
 
@@ -74,8 +80,10 @@ Frontend/
 | GET | `/api/estado` | Configuración (estaciones, tramos, sensores, pluviómetros). |
 | GET | `/api/batch?minutos=30` | Genera un lote batch de las tres fuentes con su resumen. |
 | GET | `/api/streaming/evento` | Emite un único evento de streaming con `_tipo_fuente`. |
-| POST | `/api/guardar/batch?minutos=30` | Genera y guarda un lote batch en `datos_frontend/`. |
+| GET | `/api/batch?minutos=30&dia_semana=lunes` | Lote batch de un día de la semana. |
+| POST | `/api/guardar/batch?minutos=30&dia_semana=lunes` | Genera y guarda un lote batch (bajo la fecha de ese día). |
 | POST | `/api/guardar/streaming` | Guarda los eventos de streaming acumulados. |
 | GET | `/api/consultas/dias` | Lista los días con datos almacenados. |
-| GET | `/api/consultas/dia?dia=YYYY-MM-DD&origen=todos&tipo=todos` | Tabla y resumen de un día. |
+| GET | `/api/consultas/dia?dia=YYYY-MM-DD&origen=todos&tipo=todos` | Tabla y resumen de un día (origen: `todos` / `batch` / `streaming`). |
 | GET | `/api/consultas/comparar?dia_a=...&dia_b=...` | Resúmenes de dos días para comparar. |
+| GET | `/api/riesgo/dia?dia=YYYY-MM-DD` | Nivel de riesgo del día (bajo/medio/alto) con criterios. |

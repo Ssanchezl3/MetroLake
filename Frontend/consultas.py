@@ -138,15 +138,30 @@ def _cargar_frontend_dia(dia: str) -> List[Dict]:
 def cargar_dia(dia: str, origen: str = "todos") -> List[Dict]:
     """Carga todos los eventos de un dia, opcionalmente filtrando por origen.
 
-    ``origen`` puede ser: ``todos``, ``sintetico``, ``streaming`` o ``frontend``.
+    ``origen`` puede ser:
+
+    - ``todos``      -> todas las fuentes.
+    - ``batch``      -> datasets batch, vengan del proyecto (``datos_sinteticos``)
+                        o guardados desde la interfaz (``datos_frontend/*batch*``).
+    - ``streaming``  -> eventos de streaming, del proyecto (``datos_streaming``)
+                        o guardados desde la interfaz (``datos_frontend/*streaming*``).
+
+    Se mantienen tambien los alias historicos ``sintetico`` y ``frontend``.
     """
     eventos: List[Dict] = []
-    if origen in ("todos", "sintetico"):
-        eventos += _cargar_sinteticos_dia(dia)
+    sinteticos = _cargar_sinteticos_dia(dia)
+    streaming = _cargar_streaming_dia(dia)
+    frontend = _cargar_frontend_dia(dia)
+
+    fe_batch = [e for e in frontend if e.get("_origen") == "frontend_batch"]
+    fe_streaming = [e for e in frontend if e.get("_origen") == "frontend_streaming"]
+
+    if origen in ("todos", "batch", "sintetico"):
+        eventos += sinteticos + fe_batch
     if origen in ("todos", "streaming"):
-        eventos += _cargar_streaming_dia(dia)
-    if origen in ("todos", "frontend"):
-        eventos += _cargar_frontend_dia(dia)
+        eventos += streaming + fe_streaming
+    if origen == "frontend":
+        eventos += frontend
     return eventos
 
 
@@ -192,14 +207,16 @@ def resumir_dia(eventos: List[Dict]) -> Dict:
     return resumen
 
 
-def guardar_sesion(eventos: List[Dict], modo: str) -> str:
+def guardar_sesion(eventos: List[Dict], modo: str, fecha=None) -> str:
     """Guarda una sesion (batch o streaming) en ``datos_frontend/YYYY-MM-DD/``.
 
-    Devuelve la ruta relativa del archivo creado.
+    ``fecha`` permite almacenar bajo un dia simulado concreto (p. ej. el ultimo
+    lunes). Si no se indica, se usa la fecha actual. La marca horaria evita
+    sobrescribir sesiones del mismo dia. Devuelve la ruta relativa creada.
     """
-    ahora = datetime.now()
-    dia = ahora.strftime("%Y-%m-%d")
-    marca = ahora.strftime("%H%M%S")
+    fecha = fecha or datetime.now()
+    dia = fecha.strftime("%Y-%m-%d")
+    marca = datetime.now().strftime("%H%M%S")
     nombre = f"{modo}_{marca}.json"
     ruta = os.path.join(DIR_FRONTEND, dia, nombre)
     exportar_json(eventos, ruta)

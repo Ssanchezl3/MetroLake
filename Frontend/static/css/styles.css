@@ -226,3 +226,44 @@ select, .search {
   .sidebar-info { display: none; }
   .cards, .compare, .stream-counts { grid-template-columns: 1fr; }
 }
+
+/* ---------- Riesgo Diario ---------- */
+.riesgo-hero {
+  display: flex; align-items: center; gap: 22px;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 14px; padding: 22px; margin-bottom: 18px; box-shadow: var(--shadow);
+}
+.riesgo-nivel {
+  font-size: 30px; font-weight: 800; color: #fff;
+  padding: 18px 28px; border-radius: 14px; min-width: 160px; text-align: center;
+  letter-spacing: .5px;
+}
+.nivel-alto { background: #d64545; }
+.nivel-medio { background: var(--metro-orange); }
+.nivel-bajo { background: var(--metro-green); }
+.nivel-sin { background: #94a3b0; }
+.riesgo-info { flex: 1; }
+.riesgo-puntaje { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+.riesgo-barra { height: 14px; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+.riesgo-barra-fill { height: 100%; width: 0; border-radius: 999px; transition: width .4s ease; }
+.riesgo-barra-fill.nivel-alto { background: #d64545; }
+.riesgo-barra-fill.nivel-medio { background: var(--metro-orange); }
+.riesgo-barra-fill.nivel-bajo { background: var(--metro-green); }
+.riesgo-barra-fill.nivel-sin { background: #94a3b0; }
+.riesgo-escala, #r-escala { margin-top: 8px; font-size: 12px; }
+
+.riesgo-factores { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 18px; }
+.factor-card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; box-shadow: var(--shadow); }
+.factor-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.factor-pts { font-weight: 800; color: var(--metro-green-dark); font-size: 15px; }
+.factor-razones { list-style: none; display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; }
+.factor-razones li { font-size: 13px; color: var(--text); padding-left: 16px; position: relative; }
+.factor-razones li::before { content: "•"; position: absolute; left: 2px; color: var(--metro-green); font-weight: 800; }
+.factor-metricas { display: flex; flex-wrap: wrap; gap: 8px; }
+.metric-mini { font-size: 11px; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 7px; padding: 4px 8px; color: var(--muted); }
+.metric-mini b { color: var(--metro-green-dark); }
+
+@media (max-width: 960px) {
+  .riesgo-factores { grid-template-columns: 1fr; }
+  .riesgo-hero { flex-direction: column; align-items: stretch; }
+}

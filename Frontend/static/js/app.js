@@ -8,6 +8,7 @@ const VISTAS = {
   streaming: { titulo: "Streaming en vivo", desc: "Eventos emitidos en tiempo real, fuente aleatoria." },
   consultas: { titulo: "Consultas y trazabilidad", desc: "Busca por día los datos almacenados y revísalos en tabla." },
   comparar: { titulo: "Comparar días", desc: "Guarda sesiones y compara el Día A contra el Día B." },
+  riesgo: { titulo: "Riesgo Diario", desc: "Evalúa el nivel de riesgo operativo del día con criterios sobre los datos." },
 };
 
 const CLASE_FUENTE = { pasajeros: "b-pasajeros", vibracion: "b-vibracion", clima: "b-clima" };
@@ -22,8 +23,8 @@ function activarVista(nombre) {
   );
   document.getElementById("view-title").textContent = VISTAS[nombre].titulo;
   document.getElementById("view-desc").textContent = VISTAS[nombre].desc;
-  // Al entrar a consultas o comparar, refresca la lista de dias disponibles.
-  if (nombre === "consultas" || nombre === "comparar") cargarDias();
+  // Al entrar a consultas, comparar o riesgo, refresca la lista de dias.
+  if (nombre === "consultas" || nombre === "comparar" || nombre === "riesgo") cargarDias();
 }
 
 document.querySelectorAll(".menu-item").forEach((b) =>
@@ -99,26 +100,28 @@ async function cargarEstado() {
 /* ---------- Batch ---------- */
 async function ejecutarBatch() {
   const minutos = document.getElementById("batch-minutos").value;
+  const dia = document.getElementById("batch-dia").value;
   const statusEl = document.getElementById("batch-status");
   statusEl.textContent = "Generando…";
-  const d = await (await fetch(`/api/batch?minutos=${minutos}`)).json();
+  const d = await (await fetch(`/api/batch?minutos=${minutos}&dia_semana=${dia}`)).json();
   renderResumen(document.getElementById("batch-resumen"), d.resumen);
   const filas = [];
   for (const tipo of ["pasajeros", "vibracion", "clima"]) {
     (d.muestras[tipo] || []).forEach((ev) => filas.push(filaEvento(ev, tipo, CLASE_FUENTE[tipo])));
   }
   document.getElementById("batch-muestras").innerHTML = filas.join("");
-  statusEl.textContent = `Listo · ventana ${d.ventana_min} min`;
+  statusEl.textContent = `Listo · ${d.fecha} (${d.dia_semana}) · ventana ${d.ventana_min} min`;
 }
 
 async function guardarBatch() {
   const minutos = document.getElementById("batch-minutos").value;
+  const dia = document.getElementById("batch-dia").value;
   const statusEl = document.getElementById("batch-status");
   statusEl.textContent = "Guardando…";
-  const r = await fetch(`/api/guardar/batch?minutos=${minutos}`, { method: "POST" });
+  const r = await fetch(`/api/guardar/batch?minutos=${minutos}&dia_semana=${dia}`, { method: "POST" });
   const d = await r.json();
   statusEl.textContent = d.guardado
-    ? `💾 Guardado · ${d.eventos} eventos → ${d.ruta}`
+    ? `💾 Guardado · ${d.eventos} eventos del ${d.fecha} (${d.dia_semana}) → ${d.ruta}`
     : `No se pudo guardar: ${d.motivo || "error"}`;
 }
 
@@ -198,7 +201,7 @@ async function cargarDias() {
     const opciones = dias.length
       ? dias.map((x) => `<option value="${x}">${x}</option>`).join("")
       : `<option value="">— sin datos —</option>`;
-    for (const id of ["q-dia", "cmp-dia-a", "cmp-dia-b"]) {
+    for (const id of ["q-dia", "cmp-dia-a", "cmp-dia-b", "r-dia"]) {
       const sel = document.getElementById(id);
       if (sel) {
         const previo = sel.value;
@@ -306,6 +309,54 @@ function renderResumenComparacion(cont, resumen) {
 }
 
 document.getElementById("btn-comparar").addEventListener("click", compararDias);
+
+/* ---------- Riesgo Diario ---------- */
+const COLOR_NIVEL = { ALTO: "nivel-alto", MEDIO: "nivel-medio", BAJO: "nivel-bajo", "SIN DATOS": "nivel-sin" };
+const NOMBRE_FACTOR = { infraestructura: "Infraestructura (vibración)", clima: "Clima (lluvia)", demanda: "Demanda (pasajeros)" };
+const TAG_FACTOR = { infraestructura: "tag-vibracion", clima: "tag-clima", demanda: "tag-pasajeros" };
+
+async function evaluarRiesgo() {
+  const dia = document.getElementById("r-dia").value;
+  const statusEl = document.getElementById("r-status");
+  if (!dia) { statusEl.textContent = "Selecciona un día."; return; }
+  statusEl.textContent = "Evaluando…";
+  const d = await (await fetch(`/api/riesgo/dia?dia=${dia}`)).json();
+
+  // Nivel y puntaje
+  const hero = document.getElementById("r-hero");
+  hero.style.display = "flex";
+  const nivelEl = document.getElementById("r-nivel");
+  nivelEl.textContent = d.nivel;
+  nivelEl.className = "riesgo-nivel " + (COLOR_NIVEL[d.nivel] || "nivel-sin");
+  document.getElementById("r-puntaje").textContent = d.puntaje;
+  const pct = Math.min(100, Math.round((d.puntaje / d.puntaje_maximo) * 100));
+  const barra = document.getElementById("r-barra");
+  barra.style.width = pct + "%";
+  barra.className = "riesgo-barra-fill " + (COLOR_NIVEL[d.nivel] || "nivel-sin");
+
+  // Factores con sus razones
+  const cont = document.getElementById("r-factores");
+  cont.innerHTML = Object.entries(d.factores).map(([k, f]) => {
+    const razones = (f.razones || []).map((r) => `<li>${r}</li>`).join("");
+    const metricas = Object.entries(f.metricas || {})
+      .map(([mk, mv]) => `<span class="metric-mini"><b>${fmt(mv)}</b> ${mk.replace(/_/g, " ")}</span>`)
+      .join("");
+    return `
+      <div class="factor-card">
+        <div class="factor-head">
+          <span class="tag ${TAG_FACTOR[k]}">${NOMBRE_FACTOR[k] || k}</span>
+          <span class="factor-pts">${f.puntos} pts</span>
+        </div>
+        <ul class="factor-razones">${razones}</ul>
+        <div class="factor-metricas">${metricas}</div>
+      </div>`;
+  }).join("");
+
+  statusEl.textContent = `Evaluado · ${d.total_eventos.toLocaleString("es")} eventos del ${dia}`;
+}
+
+document.getElementById("btn-riesgo").addEventListener("click", evaluarRiesgo);
+document.getElementById("btn-riesgo-refrescar").addEventListener("click", cargarDias);
 
 /* ---------- Init ---------- */
 cargarEstado();

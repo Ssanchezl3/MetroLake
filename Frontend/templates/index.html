@@ -36,6 +36,9 @@
         <button class="menu-item" data-view="comparar">
           <span class="ico">⇄</span> Comparar días
         </button>
+        <button class="menu-item" data-view="riesgo">
+          <span class="ico">⚠</span> Riesgo Diario
+        </button>
       </nav>
 
       <div class="sidebar-info" id="config-info">
@@ -88,6 +91,17 @@
       <!-- VISTA: BATCH -->
       <section class="view" id="view-batch">
         <div class="toolbar">
+          <label>Día de la semana
+            <select id="batch-dia">
+              <option value="lunes">Lunes</option>
+              <option value="martes">Martes</option>
+              <option value="miercoles">Miércoles</option>
+              <option value="jueves">Jueves</option>
+              <option value="viernes">Viernes</option>
+              <option value="sabado">Sábado</option>
+              <option value="domingo">Domingo</option>
+            </select>
+          </label>
           <label>Ventana de tiempo
             <select id="batch-minutos">
               <option value="10">10 min</option>
@@ -143,9 +157,8 @@
           <label>Origen
             <select id="q-origen">
               <option value="todos">Todos</option>
-              <option value="sintetico">Sintéticos (batch)</option>
+              <option value="batch">Batch (lotes)</option>
               <option value="streaming">Streaming</option>
-              <option value="frontend">Guardados aquí</option>
             </select>
           </label>
           <label>Fuente
@@ -199,6 +212,36 @@
           Guarda sesiones (batch o streaming) en días distintos y compáralas aquí.
           También se incluyen los datos generados por el proyecto en
           <code>datos_sinteticos/</code> y <code>datos_streaming/</code>.
+        </div>
+      </section>
+
+      <!-- VISTA: RIESGO DIARIO -->
+      <section class="view" id="view-riesgo">
+        <div class="toolbar">
+          <label>Día
+            <select id="r-dia"><option value="">— sin datos —</option></select>
+          </label>
+          <button class="btn btn-primary" id="btn-riesgo">Evaluar riesgo</button>
+          <button class="btn" id="btn-riesgo-refrescar" title="Actualizar lista de días">↻</button>
+          <span class="status" id="r-status"></span>
+        </div>
+
+        <div class="riesgo-hero" id="r-hero" style="display:none">
+          <div class="riesgo-nivel" id="r-nivel">—</div>
+          <div class="riesgo-info">
+            <div class="riesgo-puntaje">Puntaje de riesgo: <b id="r-puntaje">0</b> / 12</div>
+            <div class="riesgo-barra"><div class="riesgo-barra-fill" id="r-barra"></div></div>
+            <div class="muted" id="r-escala">Escala: BAJO &lt; 4 · MEDIO 4–7 · ALTO ≥ 8</div>
+          </div>
+        </div>
+
+        <div class="riesgo-factores" id="r-factores"></div>
+
+        <div class="compare-note muted">
+          El nivel de riesgo se calcula con los datos almacenados del día:
+          <b>infraestructura</b> (anomalías y RMS de vibración, fatiga),
+          <b>clima</b> (precipitación y alertas) y
+          <b>demanda</b> (ocupación y volumen de pasajeros).
         </div>
       </section>
     </main>
