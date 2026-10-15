@@ -68,7 +68,63 @@
 
       <!-- VISTA: PANEL -->
       <section class="view active" id="view-panel">
-        <div class="cards">
+
+        <!-- Hero estilo "designer / coder": tren partido en dos mitades -->
+        <div class="hero">
+          <div class="hero-side hero-left">
+            <h2 class="hero-word">simula</h2>
+            <p class="hero-sub">Pasajeros, vibración y clima generados en tiempo real
+              por los simuladores del Metro.</p>
+          </div>
+
+          <div class="hero-train">
+            <div class="train-split">
+              <!-- Mitad artística (color) -->
+              <div class="train-half train-art">
+                <img src="{{ url_for('static', filename='img/tren.jpg') }}" alt="Tren del Metro de Medellín"
+                     onerror="this.style.display='none'; this.parentElement.classList.add('no-img');" />
+                <div class="train-fallback" aria-hidden="true">
+                  <svg viewBox="0 0 220 160" width="100%" height="100%">
+                    <rect x="20" y="30" width="150" height="95" rx="26" fill="#ffffff" stroke="#d7dee4" stroke-width="2"/>
+                    <path d="M20 95 h150" stroke="#00953b" stroke-width="7"/>
+                    <path d="M20 104 h150" stroke="#f29100" stroke-width="4"/>
+                    <rect x="118" y="44" width="42" height="34" rx="10" fill="#1f2b33"/>
+                    <circle cx="150" cy="118" r="7" fill="#1f2b33"/><circle cx="60" cy="118" r="7" fill="#1f2b33"/>
+                  </svg>
+                </div>
+              </div>
+              <!-- Mitad "datos" (técnica) -->
+              <div class="train-half train-data">
+                <img src="{{ url_for('static', filename='img/tren.jpg') }}" alt=""
+                     onerror="this.style.display='none'; this.parentElement.classList.add('no-img');" />
+                <div class="data-overlay" aria-hidden="true">
+                  <span>VIB-RMS 2.14</span><span>PAX 1.2k</span><span>CLIMA 8mm/h</span>
+                  <span>{ "estacion": "San Antonio" }</span><span>anomalia: false</span>
+                  <span>ocupacion: 72%</span><span>alerta: verde</span>
+                </div>
+                <div class="train-fallback" aria-hidden="true">
+                  <svg viewBox="0 0 220 160" width="100%" height="100%">
+                    <rect x="50" y="30" width="150" height="95" rx="26" fill="#eef4f8" stroke="#b9c4cc" stroke-width="2"/>
+                    <path d="M50 95 h150" stroke="#00953b" stroke-width="7"/>
+                    <path d="M50 104 h150" stroke="#f29100" stroke-width="4"/>
+                    <rect x="60" y="44" width="42" height="34" rx="10" fill="#334"/>
+                    <circle cx="70" cy="118" r="7" fill="#334"/><circle cx="160" cy="118" r="7" fill="#334"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+            <div class="hero-brand">MetroLake</div>
+          </div>
+
+          <div class="hero-side hero-right">
+            <h2 class="hero-word hero-code">&lt;analiza&gt;</h2>
+            <p class="hero-sub">Trazabilidad por día, comparación A vs B y
+              evaluación de riesgo diario sobre los datos.</p>
+          </div>
+        </div>
+
+        <!-- Tarjetas de fuentes -->
+        <div class="cards cards-hero">
           <article class="card card-pasajeros">
             <div class="card-head">Pasajeros <span class="tag tag-pasajeros">torniquetes</span></div>
             <p class="muted">Entradas, salidas, ocupación y horas pico por estación.</p>

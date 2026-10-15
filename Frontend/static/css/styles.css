@@ -267,3 +267,98 @@ select, .search {
   .riesgo-factores { grid-template-columns: 1fr; }
   .riesgo-hero { flex-direction: column; align-items: stretch; }
 }
+
+/* ============================================================
+   Panel general · Hero estilo "simula / <analiza>" con tren partido
+   ============================================================ */
+.hero {
+  display: grid;
+  grid-template-columns: 1fr minmax(300px, 420px) 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0 26px;
+}
+
+.hero-side { padding: 0 10px; }
+.hero-left { text-align: right; }
+.hero-right { text-align: left; }
+.hero-word {
+  font-size: clamp(34px, 5vw, 60px);
+  font-weight: 800;
+  line-height: 1.02;
+  color: var(--metro-green-dark);
+  letter-spacing: -1px;
+}
+.hero-code { color: var(--pasajeros); font-family: "SFMono-Regular", Consolas, monospace; font-weight: 700; }
+.hero-sub { margin-top: 10px; font-size: 14px; color: var(--muted); max-width: 320px; }
+.hero-right .hero-sub { margin-left: 0; }
+.hero-left .hero-sub { margin-left: auto; }
+
+/* --- Tren partido en dos mitades --- */
+.hero-train { position: relative; }
+.train-split {
+  position: relative;
+  display: flex;
+  height: 230px;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  background: #fff;
+}
+.train-half { position: relative; width: 50%; height: 100%; overflow: hidden; }
+.train-half img {
+  position: absolute; top: 0; height: 100%; width: 200%; object-fit: cover;
+  object-position: center;
+}
+/* La imagen se posiciona para que cada mitad muestre la parte correspondiente,
+   de modo que juntas reconstruyen el tren completo. */
+.train-art img  { left: 0; filter: saturate(1.5) contrast(1.08); }
+.train-data img { right: 0; filter: grayscale(1) contrast(1.1) brightness(1.05); }
+
+/* Pincelada de color sobre la mitad artística */
+.train-art::before {
+  content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(0,149,59,.28), transparent 55%),
+    radial-gradient(120px 90px at 25% 75%, rgba(242,145,0,.35), transparent 70%),
+    radial-gradient(140px 100px at 70% 30%, rgba(0,114,188,.28), transparent 70%);
+  mix-blend-mode: multiply;
+}
+
+/* Overlay de "datos" sobre la mitad técnica */
+.data-overlay {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  display: flex; flex-direction: column; justify-content: center; gap: 7px;
+  padding-left: 16px;
+  font-family: "SFMono-Regular", Consolas, monospace; font-size: 11px;
+  color: rgba(0, 149, 59, .9);
+  background: linear-gradient(270deg, rgba(255,255,255,.55), transparent 60%);
+}
+.data-overlay span { opacity: .85; white-space: nowrap; }
+
+/* Línea divisoria central estilo "corte" */
+.train-split::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; z-index: 3;
+  background: linear-gradient(180deg, var(--metro-green), var(--metro-orange));
+  transform: translateX(-50%);
+}
+
+/* Fallback SVG cuando no existe la foto */
+.train-fallback { display: none; position: absolute; inset: 0; z-index: 1; }
+.train-half.no-img .train-fallback { display: block; }
+.train-half.no-img { background: var(--bg-soft); }
+
+.hero-brand {
+  text-align: center; margin-top: 12px;
+  font-weight: 800; letter-spacing: 3px; text-transform: uppercase;
+  font-size: 13px; color: var(--metro-green);
+}
+
+.cards-hero { margin-top: 6px; }
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; text-align: center; }
+  .hero-left, .hero-right { text-align: center; }
+  .hero-left .hero-sub, .hero-right .hero-sub { margin: 10px auto 0; }
+  .train-split { height: 190px; }
+}
