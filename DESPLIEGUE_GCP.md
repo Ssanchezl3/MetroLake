@@ -111,17 +111,37 @@ gcloud projects add-iam-policy-binding $PROJ \
 
 Igual que antes, pero pasando las variables de entorno que activan BigQuery:
 
+En PowerShell (Windows), usa el separador `^|^|` o pon cada variable con su
+propio `--set-env-vars` para evitar que las variables se peguen:
+
+```powershell
+gcloud run deploy metrolake-frontend `
+  --source . `
+  --region us-central1 `
+  --allow-unauthenticated `
+  --port 8080 `
+  --set-env-vars BQ_DATASET=project_data `
+  --set-env-vars GCP_PROJECT_ID=terraform-demo-metro
+```
+
+En bash/Linux/macOS una sola linea con coma funciona bien:
+
 ```bash
 gcloud run deploy metrolake-frontend \
-  --source . \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --port 8080 \
+  --source . --region us-central1 --allow-unauthenticated --port 8080 \
   --set-env-vars BQ_DATASET=project_data,GCP_PROJECT_ID=terraform-demo-metro
 ```
 
-Con `BQ_DATASET` definido, el frontend usa BigQuery automaticamente. Si la
+Con `BQ_DATASET` definido, el frontend usa BigQuery automaticamente (lee y, por
+defecto, tambien escribe los datos generados en las tablas `*_batch`). Si la
 variable NO esta, vuelve a usar archivos locales (util para desarrollo local).
+
+> El codigo limpia automaticamente valores mal formados de estas variables
+> (p. ej. si por error quedan pegadas), para evitar el error
+> "Invalid dataset ID".
+
+Para dejarlo en **solo lectura** (que no escriba, solo lea lo del pipeline),
+agrega `--set-env-vars BQ_PERMITIR_ESCRITURA=0`.
 
 ### 1.5 Notas importantes
 

@@ -38,13 +38,38 @@ def bq_configurado() -> bool:
     return bool(os.getenv("BQ_DATASET"))
 
 
+def _limpiar_id(valor: Optional[str]) -> Optional[str]:
+    """Saca basura comun de una variable de entorno mal pasada.
+
+    Un error tipico al desplegar en Cloud Run es que ``--set-env-vars`` no separe
+    bien y ``BQ_DATASET`` llegue como::
+
+        "project_data GCP_PROJECT_ID=terraform-demo-metro"
+
+    Esta funcion toma solo el primer token y descarta cualquier ``CLAVE=valor``
+    pegado, de modo que el dataset/proyecto siempre sea valido.
+    """
+    if not valor:
+        return valor
+    texto = valor.strip().strip('"').strip("'")
+    # Corta en el primer espacio (descarta variables pegadas por error).
+    texto = texto.split()[0] if texto.split() else texto
+    # Si quedo algo como "clave=valor", quita la parte "clave=".
+    if "=" in texto:
+        texto = texto.split("=", 1)[1]
+    return texto or None
+
+
 def _dataset() -> str:
-    return os.environ["BQ_DATASET"]
+    valor = _limpiar_id(os.environ.get("BQ_DATASET"))
+    if not valor:
+        raise RuntimeError("BQ_DATASET no esta definido correctamente.")
+    return valor
 
 
 def _project() -> Optional[str]:
     # Si no se indica, el cliente usa el proyecto por defecto de las credenciales.
-    return os.getenv("GCP_PROJECT_ID") or os.getenv("BQ_PROJECT")
+    return _limpiar_id(os.getenv("GCP_PROJECT_ID") or os.getenv("BQ_PROJECT"))
 
 
 def _cliente():

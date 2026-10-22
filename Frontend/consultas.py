@@ -236,14 +236,15 @@ def guardar_sesion(eventos: List[Dict], modo: str, fecha=None) -> str:
     donde se guardo.
     """
     if bigquery_store.bq_configurado():
-        # Por defecto el frontend SOLO lee de BigQuery (la ingesta real llega por
-        # el pipeline de Pub/Sub). La escritura se habilita opcionalmente con
-        # BQ_PERMITIR_ESCRITURA=1 para inyectar datos simulados a las tablas *_batch.
-        if os.getenv("BQ_PERMITIR_ESCRITURA") in ("1", "true", "True"):
-            insertadas = bigquery_store.guardar_eventos(eventos, modo=modo)
-            return f"BigQuery:{os.getenv('BQ_DATASET')} ({insertadas} filas)"
-        return ("Lectura desde BigQuery: los datos los alimenta el pipeline "
-                "(Pub/Sub). Escritura deshabilitada (BQ_PERMITIR_ESCRITURA=0).")
+        # Si BigQuery esta configurado, los datos generados se escriben en las
+        # tablas *_batch para que queden disponibles de forma permanente en
+        # Consultas, Comparar y Riesgo. Se puede desactivar la escritura con
+        # BQ_PERMITIR_ESCRITURA=0 (modo solo lectura del pipeline de Pub/Sub).
+        if os.getenv("BQ_PERMITIR_ESCRITURA", "1") in ("0", "false", "False"):
+            return ("Modo solo lectura: los datos los alimenta el pipeline "
+                    "(Pub/Sub). Escritura deshabilitada.")
+        insertadas = bigquery_store.guardar_eventos(eventos, modo=modo)
+        return f"BigQuery ({insertadas} filas insertadas)"
 
     fecha = fecha or datetime.now()
     dia = fecha.strftime("%Y-%m-%d")
