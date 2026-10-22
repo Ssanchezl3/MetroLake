@@ -107,11 +107,11 @@ flecha(50, 68, 50, 58.2, "", VERDE_OSC)
 flecha(76, 68, 76, 58.2, "escribe en BQ", VERDE_OSC, off=8)
 
 # ===== 5. Serving layer: BigQuery =====
-contenedor(14, 23, 72, 27, "4 · Capa de Servicio — BigQuery Data Warehouse", VERDE)
-caja(18, 39, 30, 7.5, "Tablas en tiempo real",
+contenedor(14, 23, 72, 27, "4 · Capa de Servicio — BigQuery (dataset project_data)", VERDE)
+caja(18, 39, 30, 7.5, "Tablas en vivo",
      "vibracion · pasajeros · clima", VERDE, "#e4f3ea", VERDE_OSC, 10)
-caja(52, 39, 30, 7.5, "Tablas agregadas",
-     "metricas historicas", VERDE, "#e4f3ea", VERDE_OSC, 10)
+caja(52, 39, 30, 7.5, "Tablas batch",
+     "*_batch (frontend)", VERDE, "#e4f3ea", VERDE_OSC, 10)
 caja(37, 26.5, 26, 7, "BigQuery ML",
      "modelo predictivo", VERDE_OSC, "#d4ebdd", VERDE_OSC, 10.5)
 flecha(50, 53, 50, 46.6, "ingesta continua", VERDE_OSC)
@@ -132,6 +132,22 @@ ax.text(4.6, 64, "procesamiento\ndiario (batch)", ha="center", va="center",
         fontsize=8, color="#5a6b76", style="italic", zorder=4,
         bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.9))
 
+# ===== Frontend en Cloud Run — columna lateral derecha =====
+# Lee y escribe BigQuery (Consultas, Comparar dias, Riesgo Diario).
+caja(84.5, 36, 15, 10, "Frontend\nCloud Run", "Flask · gunicorn\n(simula / analiza)",
+     AZUL, "#eaf3fb", AZUL, 10, 8)
+# Flecha de lectura: BigQuery -> Frontend
+ax.add_patch(FancyArrowPatch(
+    (86, 42.5), (82.5, 42.8), arrowstyle="-|>", mutation_scale=14, linewidth=1.8,
+    color=AZUL, zorder=3, shrinkA=2, shrinkB=2))
+ax.text(90, 49, "lee / escribe\n(DATE por día)", ha="center", va="center",
+        fontsize=7.5, color=AZUL, style="italic", zorder=4,
+        bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.9))
+# Flecha de escritura: Frontend -> tablas batch
+ax.add_patch(FancyArrowPatch(
+    (88, 39), (83, 41.5), arrowstyle="-|>", mutation_scale=14, linewidth=1.6,
+    color=AZUL, linestyle="--", zorder=3, shrinkA=2, shrinkB=2))
+
 # ===== 6. Consumo =====
 contenedor(26, 8, 48, 11, "5 · Consumo, Alertas y Visualización", NARANJA)
 caja(30, 9.5, 18, 6.5, "Alertas\nOperacionales", "", NARANJA, "#fcefd8", "#b56b00", 9.5)
@@ -140,9 +156,9 @@ flecha(50, 26.5, 50, 19.1, "inspección preventiva", VERDE_OSC)
 
 # ===== Nota de diseno =====
 ax.text(50, 3.2,
-        "Diseño alineado al código: ingesta directa de los simuladores a Pub/Sub (3 temas) "
-        "y de Pub/Sub a BigQuery vía subscriptions.\nSe omiten componentes no implementados "
-        "(Dataflow, Dataproc/Spark, monolito API REST).",
+        "Diseño alineado al código: simuladores -> Pub/Sub (3 temas) -> BigQuery vía subscriptions. "
+        "El frontend (Cloud Run) lee y escribe BigQuery\npara Consultas, Comparar días y Riesgo Diario. "
+        "Se omiten componentes no implementados (Dataflow, Dataproc/Spark, monolito API REST).",
         ha="center", va="center", fontsize=8, color="#5a6b76", style="italic")
 
 plt.tight_layout()
