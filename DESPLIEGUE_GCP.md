@@ -75,8 +75,16 @@ pasajeros  / pasajeros_batch
 vibracion  / vibracion_batch
 ```
 
-El dia se agrupa con `DATE(timestamp)`. El boton "Guardar" inserta en las tablas
-`*_batch`; las vistas leen de las 6 tablas.
+El dia se agrupa con `DATE(timestamp)`. Las vistas leen de las 6 tablas.
+
+**Lectura vs escritura:** por defecto el frontend **solo lee** de BigQuery,
+porque las tablas las alimenta el pipeline real (Pub/Sub -> subscriptions ->
+BigQuery). El boton "Guardar" no escribe en BigQuery salvo que actives la
+variable `BQ_PERMITIR_ESCRITURA=1` (entonces inserta en las tablas `*_batch`).
+
+El esquema de las tablas en BigQuery coincide exactamente con los campos de los
+eventos de los simuladores (verificado: pasajeros 12 columnas, vibracion 14,
+clima 10).
 
 #### Permisos (una sola vez)
 
@@ -88,10 +96,15 @@ PROJ=terraform-demo-metro
 NUM=$(gcloud projects describe $PROJ --format='value(projectNumber)')
 SA="$NUM-compute@developer.gserviceaccount.com"
 
+# Lectura (suficiente para el modo por defecto, solo lee de BigQuery):
 gcloud projects add-iam-policy-binding $PROJ \
-  --member="serviceAccount:$SA" --role="roles/bigquery.dataEditor"
+  --member="serviceAccount:$SA" --role="roles/bigquery.dataViewer"
 gcloud projects add-iam-policy-binding $PROJ \
   --member="serviceAccount:$SA" --role="roles/bigquery.jobUser"
+
+# Solo si vas a activar BQ_PERMITIR_ESCRITURA=1 (para que "Guardar" inserte):
+# gcloud projects add-iam-policy-binding $PROJ \
+#   --member="serviceAccount:$SA" --role="roles/bigquery.dataEditor"
 ```
 
 #### Desplegar activando BigQuery

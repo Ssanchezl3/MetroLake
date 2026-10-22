@@ -120,9 +120,15 @@ async function guardarBatch() {
   statusEl.textContent = "Guardando…";
   const r = await fetch(`/api/guardar/batch?minutos=${minutos}&dia_semana=${dia}`, { method: "POST" });
   const d = await r.json();
-  statusEl.textContent = d.guardado
-    ? `💾 Guardado · ${d.eventos} eventos del ${d.fecha} (${d.dia_semana}) → ${d.ruta}`
-    : `No se pudo guardar: ${d.motivo || "error"}`;
+  // En modo BigQuery solo-lectura (opción A), `ruta` trae un mensaje explicativo
+  // en vez de una ruta de archivo; se muestra tal cual.
+  const detalle = d.ruta || "";
+  const esMensajeBQ = detalle.startsWith("Lectura desde BigQuery");
+  statusEl.textContent = !d.guardado
+    ? `No se pudo guardar: ${d.motivo || "error"}`
+    : esMensajeBQ
+      ? `ℹ ${detalle}`
+      : `💾 Guardado · ${d.eventos} eventos del ${d.fecha} (${d.dia_semana}) → ${detalle}`;
 }
 
 document.getElementById("btn-batch").addEventListener("click", ejecutarBatch);
@@ -179,9 +185,13 @@ async function guardarStreaming() {
   const r = await fetch("/api/guardar/streaming", { method: "POST" });
   const d = await r.json();
   statusEl.classList.remove("live");
-  statusEl.textContent = d.guardado
-    ? `💾 Guardado · ${d.eventos} eventos → ${d.ruta}`
-    : `Nada que guardar (${d.motivo || "sin eventos"})`;
+  const detalle = d.ruta || "";
+  const esMensajeBQ = detalle.startsWith("Lectura desde BigQuery");
+  statusEl.textContent = !d.guardado
+    ? `Nada que guardar (${d.motivo || "sin eventos"})`
+    : esMensajeBQ
+      ? `ℹ ${detalle}`
+      : `💾 Guardado · ${d.eventos} eventos → ${detalle}`;
 }
 
 document.getElementById("btn-stream-start").addEventListener("click", iniciarStreaming);

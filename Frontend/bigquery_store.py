@@ -118,6 +118,27 @@ def cargar_dia(dia: str, origen: str = "todos") -> List[Dict]:
     return eventos
 
 
+def _normalizar_timestamp(valor):
+    """Convierte un timestamp a un formato que BigQuery acepta siempre.
+
+    Los eventos traen el timestamp como ISO sin zona (p. ej.
+    '2026-09-10T08:00:00'). Para insertar en una columna TIMESTAMP se normaliza
+    a 'YYYY-MM-DD HH:MM:SS.ffffff UTC'. Si no se puede parsear, se deja igual.
+    """
+    if valor is None:
+        return None
+    try:
+        texto = str(valor).replace("T", " ")
+        # Quita zona si venia con offset explicito; se asume UTC.
+        for marca in ("Z", "+00:00"):
+            if texto.endswith(marca):
+                texto = texto[: -len(marca)]
+        dt = datetime.fromisoformat(texto.strip())
+        return dt.strftime("%Y-%m-%d %H:%M:%S.%f") + " UTC"
+    except (ValueError, TypeError):
+        return valor
+
+
 def guardar_eventos(eventos: List[Dict], modo: str = "batch") -> int:
     """Inserta eventos en las tablas ``*_batch`` segun su ``_tipo_fuente``.
 
@@ -130,6 +151,7 @@ def guardar_eventos(eventos: List[Dict], modo: str = "batch") -> int:
         tipo = ev.get("_tipo_fuente")
         if tipo in por_tipo:
             fila = {k: v for k, v in ev.items() if not k.startswith("_")}
+            fila[COL_TIMESTAMP] = _normalizar_timestamp(fila.get(COL_TIMESTAMP))
             por_tipo[tipo].append(fila)
 
     insertadas = 0
