@@ -23,6 +23,11 @@ from typing import Dict, List
 
 from Persistencia.serializers import exportar_json
 
+try:  # soporte opcional de BigQuery (se activa con la variable BQ_DATASET)
+    from . import bigquery_store
+except ImportError:
+    import bigquery_store
+
 # Rutas estandar del proyecto, relativas a la raiz.
 _RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIR_SINTETICOS = os.path.join(_RAIZ, "datos_sinteticos")
@@ -88,7 +93,13 @@ def _dias_frontend() -> List[str]:
 
 
 def listar_dias() -> List[str]:
-    """Devuelve todos los dias disponibles (de cualquier fuente), ordenados."""
+    """Devuelve todos los dias disponibles, ordenados (desc).
+
+    Si BigQuery esta configurado (variable BQ_DATASET), consulta BigQuery;
+    de lo contrario usa los archivos locales.
+    """
+    if bigquery_store.bq_configurado():
+        return bigquery_store.listar_dias()
     dias = set(_dias_sinteticos()) | set(_dias_streaming()) | set(_dias_frontend())
     return sorted(dias, reverse=True)
 
@@ -147,7 +158,13 @@ def cargar_dia(dia: str, origen: str = "todos") -> List[Dict]:
                         o guardados desde la interfaz (``datos_frontend/*streaming*``).
 
     Se mantienen tambien los alias historicos ``sintetico`` y ``frontend``.
+
+    Si BigQuery esta configurado (BQ_DATASET), lee de BigQuery; si no, usa los
+    archivos locales.
     """
+    if bigquery_store.bq_configurado():
+        return bigquery_store.cargar_dia(dia, origen=origen)
+
     eventos: List[Dict] = []
     sinteticos = _cargar_sinteticos_dia(dia)
     streaming = _cargar_streaming_dia(dia)
@@ -208,12 +225,20 @@ def resumir_dia(eventos: List[Dict]) -> Dict:
 
 
 def guardar_sesion(eventos: List[Dict], modo: str, fecha=None) -> str:
-    """Guarda una sesion (batch o streaming) en ``datos_frontend/YYYY-MM-DD/``.
+    """Guarda una sesion (batch o streaming).
+
+    Si BigQuery esta configurado (BQ_DATASET), inserta los eventos en las tablas
+    ``*_batch`` de BigQuery (persistente). Si no, los escribe como archivo en
+    ``datos_frontend/YYYY-MM-DD/`` (disco local).
 
     ``fecha`` permite almacenar bajo un dia simulado concreto (p. ej. el ultimo
-    lunes). Si no se indica, se usa la fecha actual. La marca horaria evita
-    sobrescribir sesiones del mismo dia. Devuelve la ruta relativa creada.
+    lunes). Si no se indica, se usa la fecha actual. Devuelve una descripcion de
+    donde se guardo.
     """
+    if bigquery_store.bq_configurado():
+        insertadas = bigquery_store.guardar_eventos(eventos, modo=modo)
+        return f"BigQuery:{os.getenv('BQ_DATASET')} ({insertadas} filas)"
+
     fecha = fecha or datetime.now()
     dia = fecha.strftime("%Y-%m-%d")
     marca = datetime.now().strftime("%H%M%S")

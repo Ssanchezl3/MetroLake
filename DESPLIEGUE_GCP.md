@@ -60,13 +60,62 @@ Abre esa URL en el navegador y veras el frontend.
 Repite exactamente el mismo comando `gcloud run deploy ...`. Cloud Run crea una
 nueva revision y mueve el trafico a ella.
 
-### 1.4 Notas importantes
+### 1.4 Persistencia con BigQuery (recomendado)
 
-- **Datos efimeros:** el disco de Cloud Run es temporal. Lo que se guarde con
-  "Guardar" (`datos_frontend/`) se pierde al reiniciar o reescalar la instancia.
-  Para persistencia real, monta un bucket de Cloud Storage o escribe en BigQuery
-  (ver "Mejoras opcionales").
-- **Costo:** con escala a cero, si nadie usa la app no cobra. Ideal para demos.
+Por defecto el frontend guarda en el disco de Cloud Run, que es **efimero**: los
+datos se pierden al reiniciar la instancia (por eso las vistas muestran "sin
+datos" al rato). Para que **Consultas / Comparar dias / Riesgo Diario** usen
+datos permanentes, conecta el frontend a **BigQuery** (dataset `project_data`).
+
+El frontend lee/escribe estas tablas (una "en vivo" y una `_batch` por fuente):
+
+```
+clima      / clima_batch
+pasajeros  / pasajeros_batch
+vibracion  / vibracion_batch
+```
+
+El dia se agrupa con `DATE(timestamp)`. El boton "Guardar" inserta en las tablas
+`*_batch`; las vistas leen de las 6 tablas.
+
+#### Permisos (una sola vez)
+
+La cuenta de servicio de Cloud Run necesita leer y escribir en BigQuery. Usa la
+cuenta de computo por defecto del proyecto (NUMERO-compute@developer...):
+
+```bash
+PROJ=terraform-demo-metro
+NUM=$(gcloud projects describe $PROJ --format='value(projectNumber)')
+SA="$NUM-compute@developer.gserviceaccount.com"
+
+gcloud projects add-iam-policy-binding $PROJ \
+  --member="serviceAccount:$SA" --role="roles/bigquery.dataEditor"
+gcloud projects add-iam-policy-binding $PROJ \
+  --member="serviceAccount:$SA" --role="roles/bigquery.jobUser"
+```
+
+#### Desplegar activando BigQuery
+
+Igual que antes, pero pasando las variables de entorno que activan BigQuery:
+
+```bash
+gcloud run deploy metrolake-frontend \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --port 8080 \
+  --set-env-vars BQ_DATASET=project_data,GCP_PROJECT_ID=terraform-demo-metro
+```
+
+Con `BQ_DATASET` definido, el frontend usa BigQuery automaticamente. Si la
+variable NO esta, vuelve a usar archivos locales (util para desarrollo local).
+
+### 1.5 Notas importantes
+
+- **Sin BigQuery, los datos son efimeros.** Con BigQuery (seccion 1.4) son
+  permanentes y las vistas funcionan siempre.
+- **Costo:** con escala a cero, si nadie usa la app no cobra. BigQuery cobra por
+  almacenamiento y consultas, pero en volumenes de demo es minimo.
 
 ---
 
