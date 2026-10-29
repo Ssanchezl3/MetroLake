@@ -85,13 +85,15 @@ S = historia.append
 
 # ============================================================ PORTADA
 S(Spacer(1, 3 * cm))
-S(p("MetroLake", ParagraphStyle("T", parent=H1, fontSize=40, alignment=TA_CENTER,
-                                textColor=VERDE_OSC, spaceAfter=6)))
+S(p("MetroLake", ParagraphStyle("T", parent=H1, fontSize=44, leading=54,
+                                alignment=TA_CENTER, textColor=VERDE_OSC,
+                                spaceBefore=0, spaceAfter=22)))
 S(p("Simulador y plataforma de datos del Metro de Medellín",
-    ParagraphStyle("Sub", parent=BODY, fontSize=14, alignment=TA_CENTER,
-                   textColor=GRIS, spaceAfter=4)))
+    ParagraphStyle("Sub", parent=BODY, fontSize=14, leading=20, alignment=TA_CENTER,
+                   textColor=GRIS, spaceAfter=8)))
 S(p("Mantenimiento predictivo · Clima · Afluencia",
-    ParagraphStyle("Sub2", parent=BODY, fontSize=11, alignment=TA_CENTER, textColor=NARANJA)))
+    ParagraphStyle("Sub2", parent=BODY, fontSize=11, leading=16, alignment=TA_CENTER,
+                   textColor=NARANJA, spaceAfter=0)))
 S(Spacer(1, 1.2 * cm))
 S(p("Documentación técnica", ParagraphStyle("DT", parent=BODY, fontSize=13,
                                             alignment=TA_CENTER, textColor=colors.HexColor("#1f2b33"))))
