@@ -11,7 +11,7 @@ funciones existentes en `Fuentes/` y `Ejecucion/`.
 import os
 import random
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 
 from flask import Flask, jsonify, render_template, request
@@ -50,8 +50,14 @@ def _resumir_pasajeros(eventos):
     total_entradas = sum(e["entradas"] for e in eventos)
     total_salidas = sum(e["salidas"] for e in eventos)
     ocupacion = [e["ocupacion_estimada_pct"] for e in eventos]
-    por_estacion = Counter(e["estacion"] for e in eventos)
-    top = max(por_estacion, key=por_estacion.get)
+    # "Estacion mas activa" = la que movio mas personas (entradas + salidas).
+    # Antes se contaban eventos, pero en batch todas las estaciones tienen el
+    # mismo numero de eventos (empate) y max() devolvia siempre la primera
+    # de la lista (Niquia). Medir personas refleja la actividad real.
+    personas_por_estacion = defaultdict(int)
+    for e in eventos:
+        personas_por_estacion[e["estacion"]] += e["total_personas"]
+    top = max(personas_por_estacion, key=personas_por_estacion.get)
     return {
         "total_eventos": len(eventos),
         "total_entradas": total_entradas,
