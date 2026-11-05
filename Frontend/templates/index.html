@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MetroLake · Simulador Metro de Medellín</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
+</head>
+<body>
+  <div class="app">
+    <!-- Barra lateral / menu -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">M</div>
+        <div>
+          <div class="brand-name">MetroLake</div>
+          <div class="brand-sub">Metro de Medellín</div>
+        </div>
+      </div>
+
+      <nav class="menu">
+        <button class="menu-item active" data-view="panel">
+          <span class="ico">▦</span> Panel general
+        </button>
+        <button class="menu-item" data-view="batch">
+          <span class="ico">▤</span> Simuladores (batch)
+        </button>
+        <button class="menu-item" data-view="streaming">
+          <span class="ico">⟳</span> Streaming en vivo
+        </button>
+        <button class="menu-item" data-view="consultas">
+          <span class="ico">🔍</span> Consultas y trazabilidad
+        </button>
+        <button class="menu-item" data-view="comparar">
+          <span class="ico">⇄</span> Comparar días
+        </button>
+        <button class="menu-item" data-view="riesgo">
+          <span class="ico">⚠</span> Riesgo Diario
+        </button>
+      </nav>
+
+      <div class="sidebar-info" id="config-info">
+        <div class="info-title">Configuración</div>
+        <div class="info-row"><span>Estaciones</span><b id="cfg-estaciones">—</b></div>
+        <div class="info-row"><span>Tramos</span><b id="cfg-tramos">—</b></div>
+        <div class="info-row"><span>Sensores</span><b id="cfg-sensores">—</b></div>
+        <div class="info-row"><span>Pluviómetros</span><b id="cfg-pluviometros">—</b></div>
+      </div>
+
+      <div class="sidebar-foot">Sistema de datos · demo</div>
+    </aside>
+
+    <!-- Contenido -->
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <h1 id="view-title">Panel general</h1>
+          <p id="view-desc" class="muted">Vista rápida del sistema de simulación.</p>
+        </div>
+        <div class="legend">
+          <span class="tag tag-pasajeros">Pasajeros</span>
+          <span class="tag tag-vibracion">Vibración</span>
+          <span class="tag tag-clima">Clima</span>
+        </div>
+      </header>
+
+      <!-- VISTA: PANEL -->
+      <section class="view active" id="view-panel">
+
+        <!-- Hero estilo "designer / coder": tren partido en dos mitades -->
+        <div class="hero">
+          <div class="hero-side hero-left">
+            <h2 class="hero-word">simula</h2>
+            <p class="hero-sub">Pasajeros, vibración y clima generados en tiempo real
+              por los simuladores del Metro.</p>
+          </div>
+
+          <div class="hero-train">
+            <div class="train-split">
+              <!-- Mitad artística (color) -->
+              <div class="train-half train-art">
+                <img src="{{ url_for('static', filename='img/tren.jpg') }}" alt="Tren del Metro de Medellín"
+                     onerror="this.style.display='none'; this.parentElement.classList.add('no-img');" />
+                <div class="train-fallback" aria-hidden="true">
+                  <svg viewBox="0 0 220 160" width="100%" height="100%">
+                    <rect x="20" y="30" width="150" height="95" rx="26" fill="#ffffff" stroke="#d7dee4" stroke-width="2"/>
+                    <path d="M20 95 h150" stroke="#00953b" stroke-width="7"/>
+                    <path d="M20 104 h150" stroke="#f29100" stroke-width="4"/>
+                    <rect x="118" y="44" width="42" height="34" rx="10" fill="#1f2b33"/>
+                    <circle cx="150" cy="118" r="7" fill="#1f2b33"/><circle cx="60" cy="118" r="7" fill="#1f2b33"/>
+                  </svg>
+                </div>
+              </div>
+              <!-- Mitad "datos" (técnica) -->
+              <div class="train-half train-data">
+                <img src="{{ url_for('static', filename='img/tren.jpg') }}" alt=""
+                     onerror="this.style.display='none'; this.parentElement.classList.add('no-img');" />
+                <div class="data-overlay" aria-hidden="true">
+                  <span>VIB-RMS 2.14</span><span>PAX 1.2k</span><span>CLIMA 8mm/h</span>
+                  <span>{ "estacion": "San Antonio" }</span><span>anomalia: false</span>
+                  <span>ocupacion: 72%</span><span>alerta: verde</span>
+                </div>
+                <div class="train-fallback" aria-hidden="true">
+                  <svg viewBox="0 0 220 160" width="100%" height="100%">
+                    <rect x="50" y="30" width="150" height="95" rx="26" fill="#eef4f8" stroke="#b9c4cc" stroke-width="2"/>
+                    <path d="M50 95 h150" stroke="#00953b" stroke-width="7"/>
+                    <path d="M50 104 h150" stroke="#f29100" stroke-width="4"/>
+                    <rect x="60" y="44" width="42" height="34" rx="10" fill="#334"/>
+                    <circle cx="70" cy="118" r="7" fill="#334"/><circle cx="160" cy="118" r="7" fill="#334"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+            <div class="hero-brand">MetroLake</div>
+          </div>
+
+          <div class="hero-side hero-right">
+            <h2 class="hero-word hero-code">&lt;analiza&gt;</h2>
+            <p class="hero-sub">Trazabilidad por día, comparación A vs B y
+              evaluación de riesgo diario sobre los datos.</p>
+          </div>
+        </div>
+
+        <!-- Tarjetas de fuentes -->
+        <div class="cards cards-hero">
+          <article class="card card-pasajeros">
+            <div class="card-head">Pasajeros <span class="tag tag-pasajeros">torniquetes</span></div>
+            <p class="muted">Entradas, salidas, ocupación y horas pico por estación.</p>
+          </article>
+          <article class="card card-vibracion">
+            <div class="card-head">Vibración <span class="tag tag-vibracion">acelerómetros</span></div>
+            <p class="muted">Telemetría RMS, frecuencia, fatiga y detección de anomalías.</p>
+          </article>
+          <article class="card card-clima">
+            <div class="card-head">Clima <span class="tag tag-clima">pluviómetros</span></div>
+            <p class="muted">Precipitación, acumulado diario y nivel de alerta.</p>
+          </article>
+        </div>
+        <div class="panel-note">
+          Genera datos en <b>batch</b> o <b>streaming</b>, pulsa <b>Guardar</b> para almacenarlos,
+          y luego usa <b>Consultas</b> para buscarlos por día o <b>Comparar días</b> (A vs B).
+        </div>
+      </section>
+
+      <!-- VISTA: BATCH -->
+      <section class="view" id="view-batch">
+        <div class="toolbar">
+          <label>Día de la semana
+            <select id="batch-dia">
+              <option value="lunes">Lunes</option>
+              <option value="martes">Martes</option>
+              <option value="miercoles">Miércoles</option>
+              <option value="jueves">Jueves</option>
+              <option value="viernes">Viernes</option>
+              <option value="sabado">Sábado</option>
+              <option value="domingo">Domingo</option>
+            </select>
+          </label>
+          <label>Ventana de tiempo
+            <select id="batch-minutos">
+              <option value="10">10 min</option>
+              <option value="30" selected>30 min</option>
+              <option value="60">60 min</option>
+              <option value="120">120 min</option>
+            </select>
+          </label>
+          <button class="btn btn-primary" id="btn-batch">Generar lote batch</button>
+          <button class="btn btn-save" id="btn-batch-save">💾 Guardar</button>
+          <span class="status" id="batch-status"></span>
+        </div>
+        <div id="batch-resumen" class="metrics-grid"></div>
+        <div class="table-wrap">
+          <div class="table-title">Últimas muestras generadas</div>
+          <div id="batch-muestras" class="samples"></div>
+        </div>
+      </section>
+
+      <!-- VISTA: STREAMING -->
+      <section class="view" id="view-streaming">
+        <div class="toolbar">
+          <button class="btn btn-primary" id="btn-stream-start">▶ Iniciar streaming</button>
+          <button class="btn" id="btn-stream-stop" disabled>■ Detener</button>
+          <label>Intervalo
+            <select id="stream-intervalo">
+              <option value="1500">Lento (1.5s)</option>
+              <option value="800" selected>Normal (0.8s)</option>
+              <option value="300">Rápido (0.3s)</option>
+            </select>
+          </label>
+          <button class="btn btn-save" id="btn-stream-save">💾 Guardar sesión</button>
+          <span class="status" id="stream-status">Detenido</span>
+        </div>
+        <div class="stream-counts">
+          <div class="count count-vibracion"><b id="c-vibracion">0</b><span>vibración</span></div>
+          <div class="count count-pasajeros"><b id="c-pasajeros">0</b><span>pasajeros</span></div>
+          <div class="count count-clima"><b id="c-clima">0</b><span>clima</span></div>
+          <div class="count count-total"><b id="c-total">0</b><span>total</span></div>
+        </div>
+        <div class="table-wrap">
+          <div class="table-title">Flujo de eventos <span class="muted">(más reciente arriba)</span></div>
+          <div id="stream-feed" class="feed"></div>
+        </div>
+      </section>
+
+      <!-- VISTA: CONSULTAS -->
+      <section class="view" id="view-consultas">
+        <div class="toolbar">
+          <label>Día
+            <select id="q-dia"><option value="">— sin datos —</option></select>
+          </label>
+          <label>Origen
+            <select id="q-origen">
+              <option value="todos">Todos</option>
+              <option value="batch">Batch (lotes)</option>
+              <option value="streaming">Streaming</option>
+            </select>
+          </label>
+          <label>Fuente
+            <select id="q-tipo">
+              <option value="todos">Todas</option>
+              <option value="pasajeros">Pasajeros</option>
+              <option value="vibracion">Vibración</option>
+              <option value="clima">Clima</option>
+            </select>
+          </label>
+          <input type="text" id="q-buscar" class="search" placeholder="Buscar en la tabla…" />
+          <button class="btn btn-primary" id="btn-consultar">Consultar</button>
+          <button class="btn" id="btn-refrescar-dias" title="Actualizar lista de días">↻</button>
+          <span class="status" id="q-status"></span>
+        </div>
+        <div id="q-resumen" class="metrics-grid"></div>
+        <div class="table-wrap">
+          <div class="table-title">Datos almacenados <span class="muted" id="q-count"></span></div>
+          <div class="data-table-wrap">
+            <table class="data-table" id="q-tabla">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VISTA: COMPARAR DIAS -->
+      <section class="view" id="view-comparar">
+        <div class="toolbar">
+          <label>Día A
+            <select id="cmp-dia-a"><option value="">—</option></select>
+          </label>
+          <label>Día B
+            <select id="cmp-dia-b"><option value="">—</option></select>
+          </label>
+          <button class="btn btn-primary" id="btn-comparar">Comparar A vs B</button>
+          <span class="status" id="comparar-status"></span>
+        </div>
+        <div class="compare">
+          <div class="compare-col">
+            <div class="compare-head"><span class="badge-a">A</span> <span id="cmp-head-a">Día A</span></div>
+            <div id="cmp-a" class="metrics-grid"></div>
+          </div>
+          <div class="compare-col">
+            <div class="compare-head"><span class="badge-b">B</span> <span id="cmp-head-b">Día B</span></div>
+            <div id="cmp-b" class="metrics-grid"></div>
+          </div>
+        </div>
+        <div class="compare-note muted">
+          Guarda sesiones (batch o streaming) en días distintos y compáralas aquí.
+          También se incluyen los datos generados por el proyecto en
+          <code>datos_sinteticos/</code> y <code>datos_streaming/</code>.
+        </div>
+      </section>
+
+      <!-- VISTA: RIESGO DIARIO -->
+      <section class="view" id="view-riesgo">
+        <div class="toolbar">
+          <label>Día
+            <select id="r-dia"><option value="">— sin datos —</option></select>
+          </label>
+          <button class="btn btn-primary" id="btn-riesgo">Evaluar riesgo</button>
+          <button class="btn" id="btn-riesgo-refrescar" title="Actualizar lista de días">↻</button>
+          <span class="status" id="r-status"></span>
+        </div>
+
+        <div class="riesgo-hero" id="r-hero" style="display:none">
+          <div class="riesgo-nivel" id="r-nivel">—</div>
+          <div class="riesgo-info">
+            <div class="riesgo-puntaje">Puntaje de riesgo: <b id="r-puntaje">0</b> / 12</div>
+            <div class="riesgo-barra"><div class="riesgo-barra-fill" id="r-barra"></div></div>
+            <div class="muted" id="r-escala">Escala: BAJO &lt; 4 · MEDIO 4–7 · ALTO ≥ 8</div>
+          </div>
+        </div>
+
+        <div class="riesgo-factores" id="r-factores"></div>
+
+        <div class="compare-note muted">
+          El nivel de riesgo se calcula con los datos almacenados del día:
+          <b>infraestructura</b> (anomalías y RMS de vibración, fatiga),
+          <b>clima</b> (precipitación y alertas) y
+          <b>demanda</b> (ocupación y volumen de pasajeros).
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

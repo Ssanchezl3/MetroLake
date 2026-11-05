@@ -439,3 +439,21 @@ Ejecucion/simuladores.py
 ```
 
 La separacion permite que cada modulo tenga una responsabilidad clara: los simuladores generan datos, `dataset.py` coordina la generacion historica, `streaming.py` coordina eventos continuos y `serializers.py` persiste los resultados.
+
+## 14. Arquitectura en la nube (GCP)
+
+El siguiente diagrama refleja unicamente los componentes que el proyecto
+implementa o documenta: los simuladores publican a tres temas de Pub/Sub via
+`Integraciones/publicador_gcp.py`, y de Pub/Sub se cargan a BigQuery mediante
+BigQuery subscriptions. Se omiten los componentes que no estan implementados
+(Dataflow, Dataproc/Spark y el monolito de ingesta REST).
+
+![Arquitectura de datos de MetroLake en GCP](docs/img/arquitectura.png)
+
+El diagrama se genera con `docs/generar_arquitectura.py` (requiere
+`matplotlib`):
+
+```bash
+python -m pip install matplotlib
+python docs/generar_arquitectura.py   # escribe docs/img/arquitectura.png
+```

@@ -1,0 +1,28 @@
+# Archivos que NO se suben a Cloud Build / Cloud Run al desplegar.
+.git/
+.gitignore
+
+# Entornos virtuales y cache
+.venv/
+.venv-test/
+.venv-diag/
+env/
+venv/
+__pycache__/
+*.py[cod]
+
+# Datos generados (no deben ir al contenedor)
+datos_sinteticos/
+datos_streaming/
+datos_frontend/
+
+# Documentacion y datos pesados no necesarios en runtime
+docs/
+SIATA/
+*.zip
+*.csv
+*.ndjson
+
+# Sistema
+.DS_Store
+Thumbs.db
